@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Quanto Falta? - Pro</title>
-    <!-- Bibliotecas via CDN Padrão (Sem módulos para evitar tela branca no Android) -->
+    <title>Quanto Falta? - Controle Financeiro</title>
+    <!-- Bibliotecas via CDN Padrão (Sem módulos) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
@@ -16,20 +16,20 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .nav-btn.active { color: #059669; }
         .nav-btn.active i { transform: scale(1.1); color: #059669; }
-        .modal { display: none; }
-        .modal.active { display: flex; }
+        .modal-overlay { display: none; }
+        .modal-overlay.active { display: flex; }
         input, select, button { outline: none !important; }
-        /* Scrollbar suave */
+        /* Melhorar visual do scroll no Android */
         ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
     </style>
 <script type="importmap">
 {
   "imports": {
-    "date-fns": "https://esm.sh/date-fns@^4.1.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "react/": "https://esm.sh/react@^19.2.3/"
+    "date-fns": "https://esm.sh/date-fns@^4.1.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
   }
 }
 </script>
@@ -45,7 +45,7 @@
         </div>
         <nav class="flex-1 px-4 space-y-2">
             <button onclick="switchTab('dashboard')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400 active" data-tab="dashboard">
-                <i data-lucide="layout-dashboard"></i> Dashboard
+                <i data-lucide="layout-dashboard"></i> Início
             </button>
             <button onclick="switchTab('transactions')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400" data-tab="transactions">
                 <i data-lucide="receipt"></i> Extrato
@@ -80,152 +80,173 @@
         <div id="tab-settings" class="tab-content"></div>
     </main>
 
-    <!-- Modais -->
-    <div id="modal-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+    <!-- Overlay de Modal -->
+    <div id="modal-overlay" class="modal-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] items-center justify-center p-4">
         <div id="modal-content" class="bg-white rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]"></div>
     </div>
 
     <script>
-        // --- ESTADO ---
+        // --- ESTADO GLOBAL (LOCALSTORAGE) ---
         let state = {
             transactions: [],
             categories: ['Alimentação', 'Transporte', 'Lazer', 'Moradia', 'Saúde', 'Trabalho'],
             goals: [],
             recurringTemplates: [],
             activeTab: 'dashboard',
-            lastSyncKey: '' // YYYY-MM
+            lastSyncMonth: '' // YYYY-MM
         };
 
-        // --- UTILS ---
+        // --- UTILITÁRIOS ---
         const fmtBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
         const getISO = (d) => d.toISOString().split('T')[0];
-        const parseISO = (s) => new Date(s + 'T00:00:00');
-
+        
         function save() {
-            localStorage.setItem('finanza_v3_core', JSON.stringify(state));
+            localStorage.setItem('quanto_falta_v2_db', JSON.stringify(state));
             render();
         }
 
         function load() {
-            const data = localStorage.getItem('finanza_v3_core');
+            const data = localStorage.getItem('quanto_falta_v2_db');
             if (data) state = JSON.parse(data);
-            syncProcess();
+            syncMonth();
         }
 
-        function syncProcess() {
+        // Sincronização automática na virada do mês
+        function syncMonth() {
             const now = new Date();
-            const key = `${now.getFullYear()}-${now.getMonth()}`;
-            if (state.lastSyncKey !== key) {
-                // Marcar atrasados
-                state.transactions.forEach(t => {
-                    if (t.type === 'expense' && t.status === 'open' && parseISO(t.date) < new Date(now.getFullYear(), now.getMonth(), 1)) {
-                        t.status = 'overdue';
+            const currentKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+            
+            if (state.lastSyncMonth !== currentKey) {
+                // 1. Marcar contas não pagas de meses anteriores como "Atrasadas"
+                state.transactions.forEach(tx => {
+                    const txDate = new Date(tx.date + 'T00:00:00');
+                    if (tx.type === 'expense' && tx.status === 'open' && txDate < new Date(now.getFullYear(), now.getMonth(), 1)) {
+                        tx.status = 'overdue';
                     }
                 });
-                // Gerar recorrências
+
+                // 2. Gerar despesas recorrentes para o novo mês
                 state.recurringTemplates.forEach(tpl => {
-                    const id = `rec-${tpl.id}-${key}`;
+                    const id = `rec-${tpl.id}-${currentKey}`;
+                    // Evita duplicar se o app for aberto várias vezes no mesmo dia
                     if (!state.transactions.find(t => t.id === id)) {
+                        const dueDate = new Date(now.getFullYear(), now.getMonth(), tpl.day);
                         state.transactions.push({
-                            id, name: tpl.name, amount: tpl.amount, category: tpl.category,
-                            date: getISO(new Date(now.getFullYear(), now.getMonth(), tpl.day)),
-                            type: 'expense', status: 'open'
+                            id,
+                            name: tpl.name,
+                            amount: tpl.amount,
+                            category: tpl.category,
+                            date: getISO(dueDate),
+                            type: 'expense',
+                            status: 'open'
                         });
                     }
                 });
-                state.lastSyncKey = key;
+
+                state.lastSyncMonth = currentKey;
                 save();
             }
         }
 
         // --- NAVEGAÇÃO ---
-        function switchTab(id) {
-            state.activeTab = id;
+        function switchTab(tabId) {
+            state.activeTab = tabId;
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.getElementById('tab-' + id).classList.add('active');
+            document.getElementById('tab-' + tabId).classList.add('active');
+            
             document.querySelectorAll('.nav-btn').forEach(b => {
                 b.classList.remove('active');
-                if (b.dataset.tab === id) b.classList.add('active');
+                if (b.dataset.tab === tabId) b.classList.add('active');
             });
             render();
         }
 
         // --- RENDERIZADORES ---
         function render() {
-            const t = state.activeTab;
-            if (t === 'dashboard') renderDashboard();
-            if (t === 'transactions') renderTransactions();
-            if (t === 'insights') renderInsights();
-            if (t === 'goals') renderGoals();
-            if (t === 'settings') renderSettings();
-            lucide.createIcons();
+            const tab = state.activeTab;
+            if (tab === 'dashboard') renderDashboard();
+            if (tab === 'transactions') renderTransactions();
+            if (tab === 'insights') renderInsights();
+            if (tab === 'goals') renderGoals();
+            if (tab === 'settings') renderSettings();
+            
+            // Re-inicializa os ícones do Lucide
+            if (window.lucide) lucide.createIcons();
         }
 
         function renderDashboard() {
             const now = new Date();
             const monthTx = state.transactions.filter(tx => {
-                const d = parseISO(tx.date);
+                const d = new Date(tx.date + 'T00:00:00');
                 return (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) || tx.status === 'overdue';
             });
 
-            const inc = monthTx.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
-            const exp = monthTx.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
+            const income = monthTx.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
+            const expenses = monthTx.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
             const unpaid = monthTx.filter(t => t.type === 'expense' && t.status !== 'paid').reduce((a, b) => a + b.amount, 0);
             
-            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-            const remainDays = Math.max(1, lastDay - now.getDate() + 1);
-            const quota = unpaid / remainDays;
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            const daysLeft = Math.max(1, daysInMonth - now.getDate() + 1);
+            const dailyGoal = unpaid / daysLeft;
 
-            const urgent = monthTx.filter(t => t.type === 'expense' && t.status !== 'paid').sort((a,b) => a.date.localeCompare(b.date))[0];
+            const nextUrgent = monthTx.filter(t => t.type === 'expense' && t.status !== 'paid')
+                                     .sort((a,b) => a.date.localeCompare(b.date))[0];
 
             document.getElementById('tab-dashboard').innerHTML = `
-                <div class="space-y-8">
-                    <div class="flex justify-between items-center">
+                <div class="space-y-6">
+                    <header class="flex justify-between items-center">
                         <div>
-                            <h2 class="text-3xl font-black text-slate-800">Resumo</h2>
-                            <p class="text-slate-400 text-sm font-bold uppercase tracking-widest">${now.toLocaleDateString('pt-BR', {month:'long'})}</p>
+                            <h2 class="text-3xl font-black text-slate-800">Início</h2>
+                            <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Resumo de ${now.toLocaleDateString('pt-BR', {month:'long'})}</p>
                         </div>
                         <button onclick="openTxModal()" class="bg-emerald-600 text-white p-4 rounded-[1.5rem] shadow-xl shadow-emerald-100 active:scale-90 transition-all">
                             <i data-lucide="plus"></i>
                         </button>
-                    </div>
+                    </header>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Ganhos</p>
-                            <p class="text-3xl font-black text-emerald-600">${fmtBRL(inc)}</p>
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Entradas</p>
+                            <p class="text-2xl font-black text-emerald-600">${fmtBRL(income)}</p>
                         </div>
                         <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Despesas</p>
-                            <p class="text-3xl font-black text-rose-600">${fmtBRL(exp)}</p>
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Gastos</p>
+                            <p class="text-2xl font-black text-rose-600">${fmtBRL(expenses)}</p>
                         </div>
                         <div class="bg-white p-6 rounded-[2rem] border border-amber-100 shadow-sm ring-4 ring-amber-50">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Falta Pagar</p>
-                            <p class="text-3xl font-black text-amber-600">${fmtBRL(unpaid)}</p>
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">A Pagar</p>
+                            <p class="text-2xl font-black text-amber-600">${fmtBRL(unpaid)}</p>
                         </div>
                     </div>
 
                     <div class="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
                         <div class="relative z-10">
-                            <h3 class="text-xs font-black text-emerald-400 uppercase tracking-[0.3em] mb-4">Meta de Quitação</h3>
-                            <p class="text-sm text-slate-300 leading-relaxed mb-6">Você precisa poupar ou receber <span class="text-white font-black">${fmtBRL(quota)}/dia</span> durante os próximos <span class="text-white font-black">${remainDays} dias</span> para quitar este mês.</p>
-                            <div class="w-full bg-slate-800 h-4 rounded-full overflow-hidden">
-                                <div class="bg-emerald-500 h-full transition-all duration-1000" style="width: ${Math.min(100, (inc / (exp || 1)) * 100)}%"></div>
+                            <h3 class="text-xs font-black text-emerald-400 uppercase tracking-[0.3em] mb-4">Análise Diária</h3>
+                            <p class="text-sm text-slate-300 leading-relaxed mb-6">Faltam <span class="text-white font-black">${daysLeft} dias</span> para o fim do mês. Você precisa de <span class="text-emerald-400 font-black">${fmtBRL(dailyGoal)}/dia</span> para quitar suas pendências sem dívidas extras.</p>
+                            <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden">
+                                <div class="bg-emerald-500 h-full transition-all duration-1000" style="width: ${Math.min(100, (income / (expenses || 1)) * 100)}%"></div>
                             </div>
+                        </div>
+                        <div class="absolute -right-10 -bottom-10 opacity-10">
+                            <i data-lucide="trending-up" class="w-40 h-40"></i>
                         </div>
                     </div>
 
-                    ${urgent ? `
-                    <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between group">
+                    ${nextUrgent ? `
+                    <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between">
                         <div class="flex items-center gap-5">
-                            <div class="p-4 bg-rose-50 text-rose-500 rounded-2xl group-hover:bg-rose-500 group-hover:text-white transition-all"><i data-lucide="alert-circle"></i></div>
+                            <div class="p-4 ${nextUrgent.status === 'overdue' ? 'bg-rose-50 text-rose-500' : 'bg-amber-50 text-amber-600'} rounded-2xl"><i data-lucide="alert-circle"></i></div>
                             <div>
-                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Urgência</p>
-                                <p class="text-xl font-black text-slate-800">${urgent.name}</p>
-                                <p class="text-sm font-bold text-rose-400">${urgent.status === 'overdue' ? 'ATRASADA' : 'Vence em ' + urgent.date.split('-').reverse().join('/')}</p>
+                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Próxima Urgência</p>
+                                <p class="text-xl font-black text-slate-800">${nextUrgent.name}</p>
+                                <p class="text-sm font-bold ${nextUrgent.status === 'overdue' ? 'text-rose-500' : 'text-slate-400'}">
+                                    ${nextUrgent.status === 'overdue' ? 'ATRASADO' : 'Vence dia ' + nextUrgent.date.split('-').reverse()[0]}
+                                </p>
                             </div>
                         </div>
-                        <button onclick="payTx('${urgent.id}')" class="bg-emerald-50 text-emerald-600 px-6 py-3 rounded-2xl font-black text-xs hover:bg-emerald-600 hover:text-white transition-all">Pagar Agora</button>
+                        <button onclick="payTx('${nextUrgent.id}')" class="bg-emerald-50 text-emerald-600 p-3 rounded-2xl active:bg-emerald-600 active:text-white transition-all">
+                            <i data-lucide="check"></i>
+                        </button>
                     </div>
                     ` : ''}
                 </div>
@@ -236,42 +257,43 @@
             const sorted = [...state.transactions].sort((a,b) => b.date.localeCompare(a.date));
             document.getElementById('tab-transactions').innerHTML = `
                 <div class="space-y-6">
-                    <h2 class="text-3xl font-black text-slate-800">Extrato Completo</h2>
-                    <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden overflow-x-auto">
+                    <h2 class="text-3xl font-black text-slate-800">Extrato</h2>
+                    <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden overflow-x-auto">
                         <table class="w-full text-left">
                             <thead class="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                 <tr>
-                                    <th class="px-8 py-6">Item</th>
-                                    <th class="px-8 py-6">Data</th>
-                                    <th class="px-8 py-6">Categoria</th>
-                                    <th class="px-8 py-6 text-right">Valor</th>
-                                    <th class="px-8 py-6 text-right">Ações</th>
+                                    <th class="px-6 py-5">Item</th>
+                                    <th class="px-6 py-5">Data</th>
+                                    <th class="px-6 py-5">Categoria</th>
+                                    <th class="px-6 py-5 text-right">Valor</th>
+                                    <th class="px-6 py-5"></th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-50">
                                 ${sorted.map(tx => `
                                 <tr class="hover:bg-slate-50/50 transition-colors">
-                                    <td class="px-8 py-6">
-                                        <div class="flex items-center gap-3 font-bold text-slate-700">
+                                    <td class="px-6 py-5 font-bold text-slate-700">
+                                        <div class="flex items-center gap-3">
                                             <div class="w-2 h-2 rounded-full ${tx.type === 'income' ? 'bg-emerald-500' : 'bg-rose-500'}"></div>
                                             ${tx.name}
                                         </div>
                                     </td>
-                                    <td class="px-8 py-6 text-slate-400 font-medium">${tx.date.split('-').reverse().join('/')}</td>
-                                    <td class="px-8 py-6"><span class="bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-black text-slate-500 uppercase tracking-tighter">${tx.category}</span></td>
-                                    <td class="px-8 py-6 text-right font-black ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}">
+                                    <td class="px-6 py-5 text-slate-400 text-sm font-medium">${tx.date.split('-').reverse().join('/')}</td>
+                                    <td class="px-6 py-5"><span class="bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-black text-slate-500 uppercase">${tx.category}</span></td>
+                                    <td class="px-6 py-5 text-right font-black ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-800'}">
                                         ${tx.type === 'income' ? '+' : '-'}${fmtBRL(tx.amount)}
                                     </td>
-                                    <td class="px-8 py-6 text-right">
+                                    <td class="px-6 py-5 text-right">
                                         <div class="flex justify-end gap-2">
-                                            ${tx.status !== 'paid' ? `<button onclick="payTx('${tx.id}')" class="text-emerald-500 p-2 hover:bg-emerald-50 rounded-xl"><i data-lucide="check"></i></button>` : ''}
-                                            <button onclick="delTx('${tx.id}')" class="text-slate-200 hover:text-rose-500 p-2"><i data-lucide="trash-2"></i></button>
+                                            ${tx.status !== 'paid' ? `<button onclick="payTx('${tx.id}')" class="text-emerald-500 p-2"><i data-lucide="check"></i></button>` : ''}
+                                            <button onclick="delTx('${tx.id}')" class="text-slate-200 hover:text-rose-500 p-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                                         </div>
                                     </td>
                                 </tr>
                                 `).join('')}
                             </tbody>
                         </table>
+                        ${sorted.length === 0 ? '<div class="p-20 text-center text-slate-300 italic">Nenhum registro encontrado.</div>' : ''}
                     </div>
                 </div>
             `;
@@ -285,40 +307,40 @@
                 stats[t.category].count++;
                 stats[t.category].total += t.amount;
             });
-            const ranking = Object.entries(stats).sort((a,b) => b[1].count - a[1].count);
+            const sortedStats = Object.entries(stats).sort((a,b) => b[1].count - a[1].count);
 
             document.getElementById('tab-insights').innerHTML = `
                 <div class="space-y-8">
                     <header>
-                        <h2 class="text-3xl font-black text-slate-800">Análise de Decisão</h2>
-                        <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-1">Onde seu dinheiro está escapando</p>
+                        <h2 class="text-3xl font-black text-slate-800">Análise de Hábitos</h2>
+                        <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-1">Identifique seus maiores ralos de dinheiro</p>
                     </header>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                            <h3 class="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-8">Frequência por Categoria</h3>
+                            <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Frequência por Categoria</h3>
                             <div class="space-y-6">
-                                ${ranking.map(([name, d]) => `
+                                ${sortedStats.map(([name, data]) => `
                                 <div>
                                     <div class="flex justify-between mb-2">
                                         <span class="font-bold text-slate-700">${name}</span>
-                                        <span class="text-[10px] font-black text-slate-400 uppercase">${d.count} vezes</span>
+                                        <span class="text-[10px] font-black text-slate-400 uppercase">${data.count} vezes</span>
                                     </div>
                                     <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                                        <div class="bg-blue-500 h-full" style="width: ${(d.count / Math.max(...ranking.map(r=>r[1].count))) * 100}%"></div>
+                                        <div class="bg-blue-500 h-full" style="width: ${(data.count / Math.max(...sortedStats.map(s=>s[1].count))) * 100}%"></div>
                                     </div>
-                                    <p class="text-right font-black text-slate-400 mt-1 text-[10px]">${fmtBRL(d.total)} acumulado</p>
+                                    <p class="text-right font-black text-slate-400 mt-1 text-[10px]">${fmtBRL(data.total)} acumulado</p>
                                 </div>
                                 `).join('')}
-                                ${ranking.length === 0 ? '<p class="text-center py-10 text-slate-300 italic">Sem dados suficientes.</p>' : ''}
+                                ${sortedStats.length === 0 ? '<div class="text-center py-10 text-slate-300 italic">Sem dados suficientes para análise.</div>' : ''}
                             </div>
                         </div>
-                        <div class="bg-emerald-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-emerald-100">
+                        <div class="bg-emerald-600 p-8 rounded-[2.5rem] text-white shadow-xl">
                             <i data-lucide="zap" class="mb-4"></i>
-                            <h4 class="text-xl font-black mb-3">Dica de Corte</h4>
+                            <h4 class="text-xl font-black mb-3">Dica Financeira</h4>
                             <p class="text-emerald-50 text-sm leading-relaxed">
-                                Notamos que você gasta com frequência em <strong>${ranking[0]?.[0] || 'algumas categorias'}</strong>. 
-                                Gastos de alta frequência (gastos formiga) costumam ser mais fáceis de reduzir do que contas fixas grandes. 
-                                Foque em diminuir a repetição!
+                                Notamos que você gasta com frequência em <strong>${sortedStats[0]?.[0] || 'algumas categorias'}</strong>. 
+                                Gastos de alta frequência (os famosos "gastos formiga") costumam somar valores altos sem você perceber. 
+                                Tente reduzir a quantidade de vezes que gasta nessas categorias no próximo mês!
                             </p>
                         </div>
                     </div>
@@ -331,27 +353,37 @@
                 <div class="space-y-8">
                     <div class="flex justify-between items-center">
                         <h2 class="text-3xl font-black text-slate-800">Metas</h2>
-                        <button onclick="openGoalModal()" class="bg-blue-600 text-white p-4 rounded-[1.5rem] shadow-xl shadow-blue-100"><i data-lucide="plus"></i></button>
+                        <button onclick="openGoalModal()" class="bg-blue-600 text-white p-4 rounded-[1.5rem] shadow-xl"><i data-lucide="plus"></i></button>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         ${state.goals.map(g => {
-                            const p = (g.current / g.target) * 100;
+                            const progress = (g.current / g.target) * 100;
                             return `
                             <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden group">
-                                <div class="absolute top-0 left-0 h-1 bg-emerald-500" style="width: ${Math.min(100, p)}%"></div>
+                                <div class="absolute top-0 left-0 h-1 bg-emerald-500" style="width: ${Math.min(100, progress)}%"></div>
                                 <div class="flex justify-between items-start mb-6">
                                     <h3 class="font-black text-slate-800 text-xl">${g.name}</h3>
                                     <button onclick="delGoal('${g.id}')" class="text-slate-200 hover:text-rose-500 transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                                 </div>
                                 <div class="flex justify-between items-end mb-4">
-                                    <div><p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Guardado</p><p class="text-2xl font-black text-emerald-600">${fmtBRL(g.current)}</p></div>
-                                    <div class="text-right"><p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Alvo</p><p class="font-bold text-slate-700">${fmtBRL(g.target)}</p></div>
+                                    <div>
+                                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Acumulado</p>
+                                        <p class="text-2xl font-black text-emerald-600">${fmtBRL(g.current)}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Objetivo</p>
+                                        <p class="font-bold text-slate-700">${fmtBRL(g.target)}</p>
+                                    </div>
                                 </div>
-                                <button onclick="upGoal('${g.id}')" class="w-full py-4 bg-slate-50 text-blue-600 rounded-2xl font-black text-xs active:bg-blue-50">Adicionar Economia</button>
+                                <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                                    <div class="bg-emerald-500 h-full transition-all duration-700" style="width: ${Math.min(100, progress)}%"></div>
+                                </div>
+                                <button onclick="upGoal('${g.id}')" class="w-full mt-6 py-4 bg-slate-50 text-blue-600 rounded-2xl font-black text-xs active:bg-blue-600 active:text-white transition-all">Adicionar Valor</button>
                             </div>
                             `;
                         }).join('')}
                     </div>
+                    ${state.goals.length === 0 ? '<div class="py-20 text-center text-slate-300 italic">Crie metas para ver seu progresso aqui.</div>' : ''}
                 </div>
             `;
         }
@@ -362,26 +394,27 @@
                     <h2 class="text-3xl font-black text-slate-800">Ajustes</h2>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
                         <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-                            <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><i data-lucide="repeat"></i> Nova Despesa Recorrente</h3>
+                            <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><i data-lucide="repeat"></i> Nova Despesa Fixa</h3>
                             <div class="space-y-4">
-                                <input type="text" id="rec-name" placeholder="Ex: Netflix, Internet" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold">
+                                <input type="text" id="rec-name" placeholder="Ex: Internet, Aluguel" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold">
                                 <div class="grid grid-cols-2 gap-4">
                                     <input type="number" id="rec-amount" placeholder="Valor" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold">
-                                    <input type="number" id="rec-day" placeholder="Dia" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold">
+                                    <input type="number" id="rec-day" placeholder="Dia Vencimento" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold">
                                 </div>
                                 <select id="rec-cat" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-slate-500">
                                     ${state.categories.map(c => `<option value="${c}">${c}</option>`).join('')}
                                 </select>
-                                <button onclick="addRec()" class="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black shadow-xl active:scale-95 transition-all">Salvar Modelo</button>
+                                <button onclick="addRecTpl()" class="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black shadow-xl">Salvar Modelo Fixo</button>
                             </div>
                         </section>
+                        
                         <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
                             <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><i data-lucide="tag"></i> Categorias</h3>
                             <div class="flex gap-2">
                                 <input type="text" id="new-cat" placeholder="Nova..." class="flex-1 p-3 bg-slate-50 border-none rounded-xl font-bold">
                                 <button onclick="addCat()" class="bg-emerald-600 text-white p-3 rounded-xl"><i data-lucide="plus"></i></button>
                             </div>
-                            <div class="flex flex-wrap gap-2">
+                            <div class="flex flex-wrap gap-2 pt-4">
                                 ${state.categories.map(c => `
                                     <div class="px-4 py-2 bg-slate-50 rounded-full text-xs font-bold text-slate-600 flex items-center gap-2 border border-slate-100">
                                         ${c} <button onclick="delCat('${c}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="x" class="w-3 h-3"></i></button>
@@ -390,15 +423,23 @@
                             </div>
                         </section>
                     </div>
+
                     <section class="space-y-4">
-                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Automações Ativas</h3>
+                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Despesas Fixas Ativas</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             ${state.recurringTemplates.map(t => `
-                            <div class="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-center">
-                                <div><p class="font-black text-slate-800">${t.name}</p><p class="text-[10px] font-black text-slate-400 uppercase">Dia ${t.day} • ${t.category}</p></div>
-                                <div class="flex items-center gap-6"><p class="font-black text-slate-800">${fmtBRL(t.amount)}</p><button onclick="delTpl('${t.id}')" class="text-rose-200 hover:text-rose-500"><i data-lucide="trash-2"></i></button></div>
+                            <div class="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-center shadow-sm">
+                                <div>
+                                    <p class="font-black text-slate-800">${t.name}</p>
+                                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Todo dia ${t.day} • ${t.category}</p>
+                                </div>
+                                <div class="flex items-center gap-6">
+                                    <p class="font-black text-slate-800">${fmtBRL(t.amount)}</p>
+                                    <button onclick="delRecTpl('${t.id}')" class="text-rose-200 hover:text-rose-500 transition-all"><i data-lucide="trash-2"></i></button>
+                                </div>
                             </div>
                             `).join('')}
+                            ${state.recurringTemplates.length === 0 ? '<div class="md:col-span-2 py-10 text-center text-slate-300 italic bg-white border border-dashed rounded-[2rem]">Nenhuma despesa fixa configurada.</div>' : ''}
                         </div>
                     </section>
                 </div>
@@ -406,62 +447,108 @@
         }
 
         // --- ACTIONS ---
-        function payTx(id) { const tx = state.transactions.find(t=>t.id===id); if(tx){tx.status='paid'; save();} }
-        function delTx(id) { if(confirm('Excluir transação?')){state.transactions=state.transactions.filter(t=>t.id!==id); save();} }
-        function addCat() { const v = document.getElementById('new-cat').value.trim(); if(v && !state.categories.includes(v)){state.categories.push(v); save();} }
-        function delCat(v) { state.categories=state.categories.filter(c=>c!==v); save(); }
-        function delTpl(id) { state.recurringTemplates=state.recurringTemplates.filter(t=>t.id!==id); save(); }
-        function upGoal(id) { const g=state.goals.find(x=>x.id===id); const v=prompt('Quanto adicionar?'); if(v) {g.current+=parseFloat(v); save();} }
-        function delGoal(id) { if(confirm('Excluir meta?')){state.goals=state.goals.filter(x=>x.id!==id); save();} }
+        function payTx(id) { 
+            const tx = state.transactions.find(t=>t.id===id); 
+            if(tx){ tx.status = 'paid'; save(); } 
+        }
 
-        function addRec() {
+        function delTx(id) { 
+            if(confirm('Deseja excluir este lançamento?')) {
+                state.transactions = state.transactions.filter(t=>t.id!==id); 
+                save(); 
+            }
+        }
+
+        function addCat() {
+            const v = document.getElementById('new-cat').value.trim();
+            if(v && !state.categories.includes(v)) {
+                state.categories.push(v);
+                save();
+            }
+        }
+
+        function delCat(v) {
+            state.categories = state.categories.filter(c => c !== v);
+            save();
+        }
+
+        function addRecTpl() {
             const name = document.getElementById('rec-name').value;
             const amount = parseFloat(document.getElementById('rec-amount').value);
             const day = parseInt(document.getElementById('rec-day').value);
             const category = document.getElementById('rec-cat').value;
+            
             if(!name || !amount || !day) return;
-            const id = Math.random().toString(36).substr(2,9);
-            state.recurringTemplates.push({id, name, amount, day, category});
-            // Lançar primeiro
+            
+            const id = Math.random().toString(36).substr(2, 9);
+            state.recurringTemplates.push({ id, name, amount, day, category });
+            
+            // Lança logo para o mês atual para facilitar
             const now = new Date();
             state.transactions.push({
-                id: `rec-${id}-${now.getFullYear()}-${now.getMonth()}`,
-                name, amount, category, date: getISO(new Date(now.getFullYear(), now.getMonth(), day)), type: 'expense', status: 'open'
+                id: `rec-${id}-${now.getFullYear()}-${now.getMonth()+1}`,
+                name, amount, category, 
+                date: getISO(new Date(now.getFullYear(), now.getMonth(), day)), 
+                type: 'expense', status: 'open'
             });
+
             save();
+        }
+
+        function delRecTpl(id) {
+            state.recurringTemplates = state.recurringTemplates.filter(t => t.id !== id);
+            save();
+        }
+
+        function upGoal(id) {
+            const g = state.goals.find(x => x.id === id);
+            const v = prompt(`Quanto deseja somar à meta "${g.name}"?`);
+            if(v && !isNaN(v)) {
+                g.current += parseFloat(v);
+                save();
+            }
+        }
+
+        function delGoal(id) {
+            if(confirm('Excluir esta meta?')) {
+                state.goals = state.goals.filter(x => x.id !== id);
+                save();
+            }
         }
 
         // --- MODAIS ---
         function openTxModal() {
-            const container = document.getElementById('modal-overlay');
+            const modal = document.getElementById('modal-overlay');
             const content = document.getElementById('modal-content');
             content.innerHTML = `
                 <div class="space-y-6">
                     <h3 class="text-2xl font-black text-slate-800">Novo Lançamento</h3>
                     <div class="grid grid-cols-2 gap-2 bg-slate-50 p-1.5 rounded-2xl">
-                        <button id="btn-inc" onclick="updateModalType('income')" class="flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-400">Receita</button>
-                        <button id="btn-exp" onclick="updateModalType('expense')" class="flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-white text-rose-600 shadow-sm">Gasto</button>
+                        <button id="btn-inc" onclick="updModalType('income')" class="flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-400">Receita</button>
+                        <button id="btn-exp" onclick="updModalType('expense')" class="flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-white text-rose-600 shadow-sm">Gasto</button>
                     </div>
                     <input type="hidden" id="tx-type" value="expense">
+                    
                     <div class="space-y-4">
-                        <input type="text" id="tx-name" placeholder="Título (ex: Mercado, Salário)" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-none">
+                        <input type="text" id="tx-name" placeholder="Título (ex: Mercado, Salário)" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
                         <div class="grid grid-cols-2 gap-4">
-                            <input type="number" id="tx-amount" placeholder="Valor R$" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-none">
-                            <select id="tx-cat" class="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-500 outline-none border-none">
+                            <input type="number" id="tx-amount" placeholder="Valor R$" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
+                            <select id="tx-cat" class="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-500 outline-none">
                                 ${state.categories.map(c => `<option value="${c}">${c}</option>`).join('')}
                             </select>
                         </div>
                         <div class="space-y-1">
-                            <label id="date-label" class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Data de Vencimento</label>
-                            <input type="date" id="tx-date" value="${getISO(new Date())}" class="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-500 outline-none border-none">
+                            <label id="date-label" class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Data Vencimento</label>
+                            <input type="date" id="tx-date" value="${getISO(new Date())}" class="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-500 outline-none">
                         </div>
+                        
                         <div id="expense-options" class="space-y-4">
                             <div class="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                                <input type="checkbox" id="tx-parcelar" onchange="toggleParcelas()" class="w-5 h-5 accent-emerald-600">
+                                <input type="checkbox" id="tx-parcelar" onchange="toggleParc()" class="w-5 h-5 accent-emerald-600">
                                 <label for="tx-parcelar" class="text-sm font-bold text-slate-600">Parcelar este gasto?</label>
                             </div>
-                            <div id="parcelas-area" class="hidden">
-                                <input type="number" id="tx-num-parcelas" placeholder="Número de parcelas (ex: 12)" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none border-none">
+                            <div id="parc-area" class="hidden">
+                                <input type="number" id="tx-num-parc" placeholder="Quantas parcelas? (ex: 12)" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
                             </div>
                             <div class="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
                                 <input type="checkbox" id="tx-paid" class="w-5 h-5 accent-emerald-600">
@@ -469,17 +556,18 @@
                             </div>
                         </div>
                     </div>
+
                     <div class="flex gap-4 pt-4">
                         <button onclick="closeModal()" class="flex-1 py-4 text-slate-400 font-bold">Cancelar</button>
                         <button onclick="confirmTx()" class="flex-1 py-4 bg-emerald-600 text-white rounded-[1.5rem] font-black shadow-xl active:scale-95 transition-all">Confirmar</button>
                     </div>
                 </div>
             `;
-            container.classList.add('active');
-            lucide.createIcons();
+            modal.classList.add('active');
+            if (window.lucide) lucide.createIcons();
         }
 
-        function updateModalType(type) {
+        function updModalType(type) {
             const txType = document.getElementById('tx-type');
             const btnInc = document.getElementById('btn-inc');
             const btnExp = document.getElementById('btn-exp');
@@ -490,19 +578,19 @@
             if(type === 'income') {
                 btnInc.className = 'flex-1 py-3 rounded-xl font-black text-[10px] uppercase bg-white text-emerald-600 shadow-sm';
                 btnExp.className = 'flex-1 py-3 rounded-xl font-black text-[10px] uppercase text-slate-400';
-                label.innerText = 'Data de Recebimento';
+                label.innerText = 'Data Recebimento';
                 opt.classList.add('hidden');
             } else {
                 btnExp.className = 'flex-1 py-3 rounded-xl font-black text-[10px] uppercase bg-white text-rose-600 shadow-sm';
                 btnInc.className = 'flex-1 py-3 rounded-xl font-black text-[10px] uppercase text-slate-400';
-                label.innerText = 'Data de Vencimento';
+                label.innerText = 'Data Vencimento';
                 opt.classList.remove('hidden');
             }
         }
 
-        function toggleParcelas() {
+        function toggleParc() {
             const check = document.getElementById('tx-parcelar').checked;
-            document.getElementById('parcelas-area').classList.toggle('hidden', !check);
+            document.getElementById('parc-area').classList.toggle('hidden', !check);
         }
 
         function confirmTx() {
@@ -511,27 +599,32 @@
             const amount = parseFloat(document.getElementById('tx-amount').value);
             const cat = document.getElementById('tx-cat').value;
             const dateStr = document.getElementById('tx-date').value;
-            const isParcelar = document.getElementById('tx-parcelar')?.checked || false;
-            const nParcelas = parseInt(document.getElementById('tx-num-parcelas')?.value) || 1;
-            const isPaid = document.getElementById('tx-paid')?.checked || false;
+            const isParcelar = document.getElementById('tx-parcelar')?.checked;
+            const numParc = parseInt(document.getElementById('tx-num-parc')?.value) || 1;
+            const isPaid = document.getElementById('tx-paid')?.checked;
 
-            if(!name || !amount) return;
+            if(!name || isNaN(amount)) return alert('Preencha os campos obrigatórios');
 
-            if(type === 'expense' && isParcelar && nParcelas > 1) {
-                const baseDate = parseISO(dateStr);
-                for(let i=0; i<nParcelas; i++) {
+            if(type === 'expense' && isParcelar && numParc > 1) {
+                const baseDate = new Date(dateStr + 'T00:00:00');
+                for(let i=0; i < numParc; i++) {
                     const d = new Date(baseDate);
                     d.setMonth(baseDate.getMonth() + i);
                     state.transactions.push({
-                        id: Math.random().toString(36).substr(2,9),
-                        name: `${name} (${String(i+1).padStart(2,'0')}/${String(nParcelas).padStart(2,'0')})`,
-                        amount, category: cat, date: getISO(d), type: 'expense', status: (i===0 && isPaid) ? 'paid' : 'open'
+                        id: Math.random().toString(36).substr(2, 9),
+                        name: `${name} (${String(i+1).padStart(2, '0')}/${String(numParc).padStart(2, '0')})`,
+                        amount: amount, 
+                        category: cat,
+                        date: getISO(d),
+                        type: 'expense',
+                        status: (i === 0 && isPaid) ? 'paid' : 'open'
                     });
                 }
             } else {
                 state.transactions.push({
-                    id: Math.random().toString(36).substr(2,9),
-                    name, amount, category: cat, date: dateStr, type, status: (type==='income' || isPaid) ? 'paid' : 'open'
+                    id: Math.random().toString(36).substr(2, 9),
+                    name, amount, category: cat, date: dateStr, type, 
+                    status: (type === 'income' || isPaid) ? 'paid' : 'open'
                 });
             }
             closeModal();
@@ -544,39 +637,40 @@
             content.innerHTML = `
                 <div class="space-y-6">
                     <h3 class="text-2xl font-black text-slate-800">Nova Meta</h3>
-                    <input type="text" id="goal-name" placeholder="Ex: Reserva, Viagem" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold">
-                    <input type="number" id="goal-target" placeholder="Valor Objetivo R$" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold">
-                    <input type="number" id="goal-current" placeholder="Já tenho (opcional)" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold" value="0">
+                    <input type="text" id="goal-name" placeholder="Ex: Viagem, Reserva" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
+                    <input type="number" id="goal-target" placeholder="Valor Objetivo R$" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
+                    <input type="number" id="goal-current" placeholder="Já tenho (opcional)" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none" value="0">
                     <div class="flex gap-4 pt-4">
                         <button onclick="closeModal()" class="flex-1 py-4 text-slate-400 font-bold">Cancelar</button>
-                        <button onclick="confirmGoal()" class="flex-1 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-xl active:scale-95 transition-all">Salvar Meta</button>
+                        <button onclick="confirmGoal()" class="flex-1 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-xl">Criar Meta</button>
                     </div>
                 </div>
             `;
             modal.classList.add('active');
-            lucide.createIcons();
+            if (window.lucide) lucide.createIcons();
         }
 
         function confirmGoal() {
             const name = document.getElementById('goal-name').value;
             const target = parseFloat(document.getElementById('goal-target').value);
             const current = parseFloat(document.getElementById('goal-current').value) || 0;
-            if(!name || !target) return;
-            state.goals.push({ id: Math.random().toString(36).substr(2,9), name, target, current });
+            if(!name || isNaN(target)) return;
+            state.goals.push({ id: Math.random().toString(36).substr(2, 9), name, target, current });
             closeModal();
             save();
         }
 
         function closeModal() { document.getElementById('modal-overlay').classList.remove('active'); }
 
-        // Bloqueio de zoom duplo no mobile
-        document.addEventListener('touchstart', (e) => { if(e.touches.length > 1) e.preventDefault(); }, {passive:false});
+        // Bloqueio de zoom duplo para melhor sensação de App
+        document.addEventListener('touchstart', function (event) {
+            if (event.touches.length > 1) { event.preventDefault(); }
+        }, { passive: false });
 
-        // --- INIT ---
+        // --- INICIALIZAÇÃO ---
         window.onload = () => {
             load();
             render();
-            lucide.createIcons();
         };
     </script>
 </body>
