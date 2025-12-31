@@ -26,10 +26,10 @@
 <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
     "date-fns": "https://esm.sh/date-fns@^4.1.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+    "react": "https://esm.sh/react@^19.2.3",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
@@ -91,9 +91,15 @@
             transactions: [],
             categories: ['Alimentação', 'Transporte', 'Lazer', 'Moradia', 'Saúde', 'Trabalho'],
             goals: [],
-            recurringTemplates: [],
             activeTab: 'dashboard',
             lastSyncMonth: '' // YYYY-MM
+        };
+
+        // Filtros Temporários (Não salvos no Storage)
+        let filters = {
+            month: '', // YYYY-MM
+            onlyOpen: false,
+            sortOrder: 'desc' // 'desc' ou 'asc'
         };
 
         // --- UTILITÁRIOS ---
@@ -114,35 +120,15 @@
         // Sincronização automática na virada do mês
         function syncMonth() {
             const now = new Date();
-            const currentKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+            const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             
             if (state.lastSyncMonth !== currentKey) {
-                // 1. Marcar contas não pagas de meses anteriores como "Atrasadas"
                 state.transactions.forEach(tx => {
                     const txDate = new Date(tx.date + 'T00:00:00');
                     if (tx.type === 'expense' && tx.status === 'open' && txDate < new Date(now.getFullYear(), now.getMonth(), 1)) {
                         tx.status = 'overdue';
                     }
                 });
-
-                // 2. Gerar despesas recorrentes para o novo mês
-                state.recurringTemplates.forEach(tpl => {
-                    const id = `rec-${tpl.id}-${currentKey}`;
-                    // Evita duplicar se o app for aberto várias vezes no mesmo dia
-                    if (!state.transactions.find(t => t.id === id)) {
-                        const dueDate = new Date(now.getFullYear(), now.getMonth(), tpl.day);
-                        state.transactions.push({
-                            id,
-                            name: tpl.name,
-                            amount: tpl.amount,
-                            category: tpl.category,
-                            date: getISO(dueDate),
-                            type: 'expense',
-                            status: 'open'
-                        });
-                    }
-                });
-
                 state.lastSyncMonth = currentKey;
                 save();
             }
@@ -169,13 +155,12 @@
             if (tab === 'insights') renderInsights();
             if (tab === 'goals') renderGoals();
             if (tab === 'settings') renderSettings();
-            
-            // Re-inicializa os ícones do Lucide
             if (window.lucide) lucide.createIcons();
         }
 
         function renderDashboard() {
             const now = new Date();
+            const todayISO = getISO(now);
             const monthTx = state.transactions.filter(tx => {
                 const d = new Date(tx.date + 'T00:00:00');
                 return (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) || tx.status === 'overdue';
@@ -191,6 +176,19 @@
 
             const nextUrgent = monthTx.filter(t => t.type === 'expense' && t.status !== 'paid')
                                      .sort((a,b) => a.date.localeCompare(b.date))[0];
+
+            let urgentLabel = "";
+            let urgentClass = "text-slate-400";
+            let urgentIconClass = "bg-amber-50 text-amber-600";
+
+            if (nextUrgent) {
+                const isOverdue = nextUrgent.date < todayISO || nextUrgent.status === 'overdue';
+                urgentLabel = isOverdue ? "JÁ ESTÁ VENCIDO" : "Vence dia " + nextUrgent.date.split('-').reverse().slice(0,2).join('/');
+                if (isOverdue) {
+                    urgentClass = "text-rose-600 font-black";
+                    urgentIconClass = "bg-rose-50 text-rose-500";
+                }
+            }
 
             document.getElementById('tab-dashboard').innerHTML = `
                 <div class="space-y-6">
@@ -235,12 +233,12 @@
                     ${nextUrgent ? `
                     <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between">
                         <div class="flex items-center gap-5">
-                            <div class="p-4 ${nextUrgent.status === 'overdue' ? 'bg-rose-50 text-rose-500' : 'bg-amber-50 text-amber-600'} rounded-2xl"><i data-lucide="alert-circle"></i></div>
+                            <div class="p-4 ${urgentIconClass} rounded-2xl"><i data-lucide="alert-circle"></i></div>
                             <div>
                                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Próxima Urgência</p>
                                 <p class="text-xl font-black text-slate-800">${nextUrgent.name}</p>
-                                <p class="text-sm font-bold ${nextUrgent.status === 'overdue' ? 'text-rose-500' : 'text-slate-400'}">
-                                    ${nextUrgent.status === 'overdue' ? 'ATRASADO' : 'Vence dia ' + nextUrgent.date.split('-').reverse()[0]}
+                                <p class="text-sm font-bold ${urgentClass}">
+                                    ${urgentLabel}
                                 </p>
                             </div>
                         </div>
@@ -254,12 +252,56 @@
         }
 
         function renderTransactions() {
-            const sorted = [...state.transactions].sort((a,b) => b.date.localeCompare(a.date));
+            // Aplicar Filtros
+            let filtered = [...state.transactions];
+
+            // 1. Filtro de Faturas em Aberto
+            if (filters.onlyOpen) {
+                filtered = filtered.filter(tx => tx.type === 'expense' && (tx.status === 'open' || tx.status === 'overdue'));
+            }
+
+            // 2. Filtro de Mês
+            if (filters.month) {
+                filtered = filtered.filter(tx => tx.date.startsWith(filters.month));
+            }
+
+            // 3. Ordenação
+            filtered.sort((a, b) => {
+                const comparison = a.date.localeCompare(b.date);
+                return filters.sortOrder === 'desc' ? -comparison : comparison;
+            });
+
             document.getElementById('tab-transactions').innerHTML = `
                 <div class="space-y-6">
-                    <h2 class="text-3xl font-black text-slate-800">Extrato</h2>
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <h2 class="text-3xl font-black text-slate-800">Extrato</h2>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <!-- Seletor de Mês -->
+                            <div class="relative">
+                                <input type="month" 
+                                       value="${filters.month}" 
+                                       onchange="updateFilter('month', this.value)" 
+                                       class="bg-white border border-slate-200 text-xs font-bold text-slate-600 px-4 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all">
+                            </div>
+
+                            <!-- Filtro Apenas Abertos -->
+                            <button onclick="updateFilter('onlyOpen', ${!filters.onlyOpen})" 
+                                    class="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-black transition-all ${filters.onlyOpen ? 'bg-amber-600 border-amber-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-400'}">
+                                <i data-lucide="clock" class="w-3 h-3"></i> 
+                                ${filters.onlyOpen ? 'EM ABERTO' : 'TODOS'}
+                            </button>
+
+                            <!-- Ordenação -->
+                            <button onclick="updateFilter('sortOrder', '${filters.sortOrder === 'desc' ? 'asc' : 'desc'}')" 
+                                    class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-600 active:scale-95 transition-all">
+                                <i data-lucide="${filters.sortOrder === 'desc' ? 'arrow-down-narrow-wide' : 'arrow-up-narrow-wide'}" class="w-3 h-3 text-emerald-500"></i>
+                                ${filters.sortOrder === 'desc' ? 'RECENTES' : 'ANTIGOS'}
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden overflow-x-auto">
-                        <table class="w-full text-left">
+                        <table class="w-full text-left min-w-[600px]">
                             <thead class="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                 <tr>
                                     <th class="px-6 py-5">Item</th>
@@ -270,11 +312,11 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-50">
-                                ${sorted.map(tx => `
+                                ${filtered.map(tx => `
                                 <tr class="hover:bg-slate-50/50 transition-colors">
                                     <td class="px-6 py-5 font-bold text-slate-700">
                                         <div class="flex items-center gap-3">
-                                            <div class="w-2 h-2 rounded-full ${tx.type === 'income' ? 'bg-emerald-500' : 'bg-rose-500'}"></div>
+                                            <div class="w-2 h-2 rounded-full ${tx.type === 'income' ? 'bg-emerald-500' : (tx.status === 'overdue' ? 'bg-rose-600 animate-pulse' : (tx.status === 'open' ? 'bg-amber-500' : 'bg-slate-300'))}"></div>
                                             ${tx.name}
                                         </div>
                                     </td>
@@ -285,7 +327,7 @@
                                     </td>
                                     <td class="px-6 py-5 text-right">
                                         <div class="flex justify-end gap-2">
-                                            ${tx.status !== 'paid' ? `<button onclick="payTx('${tx.id}')" class="text-emerald-500 p-2"><i data-lucide="check"></i></button>` : ''}
+                                            ${tx.status !== 'paid' && tx.type === 'expense' ? `<button onclick="payTx('${tx.id}')" class="text-emerald-500 p-2 hover:bg-emerald-50 rounded-lg transition-all"><i data-lucide="check"></i></button>` : ''}
                                             <button onclick="delTx('${tx.id}')" class="text-slate-200 hover:text-rose-500 p-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                                         </div>
                                     </td>
@@ -293,10 +335,17 @@
                                 `).join('')}
                             </tbody>
                         </table>
-                        ${sorted.length === 0 ? '<div class="p-20 text-center text-slate-300 italic">Nenhum registro encontrado.</div>' : ''}
+                        ${filtered.length === 0 ? '<div class="p-20 text-center text-slate-300 italic">Nenhum registro encontrado com estes filtros.</div>' : ''}
                     </div>
                 </div>
             `;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        // --- FILTROS ---
+        function updateFilter(key, value) {
+            filters[key] = value;
+            renderTransactions();
         }
 
         function renderInsights() {
@@ -392,22 +441,7 @@
             document.getElementById('tab-settings').innerHTML = `
                 <div class="space-y-10">
                     <h2 class="text-3xl font-black text-slate-800">Ajustes</h2>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                        <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-                            <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><i data-lucide="repeat"></i> Nova Despesa Fixa</h3>
-                            <div class="space-y-4">
-                                <input type="text" id="rec-name" placeholder="Ex: Internet, Aluguel" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold">
-                                <div class="grid grid-cols-2 gap-4">
-                                    <input type="number" id="rec-amount" placeholder="Valor" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold">
-                                    <input type="number" id="rec-day" placeholder="Dia Vencimento" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold">
-                                </div>
-                                <select id="rec-cat" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold text-slate-500">
-                                    ${state.categories.map(c => `<option value="${c}">${c}</option>`).join('')}
-                                </select>
-                                <button onclick="addRecTpl()" class="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] font-black shadow-xl">Salvar Modelo Fixo</button>
-                            </div>
-                        </section>
-                        
+                    <div class="grid grid-cols-1 gap-10">
                         <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
                             <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><i data-lucide="tag"></i> Categorias</h3>
                             <div class="flex gap-2">
@@ -423,25 +457,6 @@
                             </div>
                         </section>
                     </div>
-
-                    <section class="space-y-4">
-                        <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Despesas Fixas Ativas</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            ${state.recurringTemplates.map(t => `
-                            <div class="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-center shadow-sm">
-                                <div>
-                                    <p class="font-black text-slate-800">${t.name}</p>
-                                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Todo dia ${t.day} • ${t.category}</p>
-                                </div>
-                                <div class="flex items-center gap-6">
-                                    <p class="font-black text-slate-800">${fmtBRL(t.amount)}</p>
-                                    <button onclick="delRecTpl('${t.id}')" class="text-rose-200 hover:text-rose-500 transition-all"><i data-lucide="trash-2"></i></button>
-                                </div>
-                            </div>
-                            `).join('')}
-                            ${state.recurringTemplates.length === 0 ? '<div class="md:col-span-2 py-10 text-center text-slate-300 italic bg-white border border-dashed rounded-[2rem]">Nenhuma despesa fixa configurada.</div>' : ''}
-                        </div>
-                    </section>
                 </div>
             `;
         }
@@ -472,34 +487,6 @@
             save();
         }
 
-        function addRecTpl() {
-            const name = document.getElementById('rec-name').value;
-            const amount = parseFloat(document.getElementById('rec-amount').value);
-            const day = parseInt(document.getElementById('rec-day').value);
-            const category = document.getElementById('rec-cat').value;
-            
-            if(!name || !amount || !day) return;
-            
-            const id = Math.random().toString(36).substr(2, 9);
-            state.recurringTemplates.push({ id, name, amount, day, category });
-            
-            // Lança logo para o mês atual para facilitar
-            const now = new Date();
-            state.transactions.push({
-                id: `rec-${id}-${now.getFullYear()}-${now.getMonth()+1}`,
-                name, amount, category, 
-                date: getISO(new Date(now.getFullYear(), now.getMonth(), day)), 
-                type: 'expense', status: 'open'
-            });
-
-            save();
-        }
-
-        function delRecTpl(id) {
-            state.recurringTemplates = state.recurringTemplates.filter(t => t.id !== id);
-            save();
-        }
-
         function upGoal(id) {
             const g = state.goals.find(x => x.id === id);
             const v = prompt(`Quanto deseja somar à meta "${g.name}"?`);
@@ -516,7 +503,6 @@
             }
         }
 
-        // --- MODAIS ---
         function openTxModal() {
             const modal = document.getElementById('modal-overlay');
             const content = document.getElementById('modal-content');
@@ -528,9 +514,8 @@
                         <button id="btn-exp" onclick="updModalType('expense')" class="flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-white text-rose-600 shadow-sm">Gasto</button>
                     </div>
                     <input type="hidden" id="tx-type" value="expense">
-                    
                     <div class="space-y-4">
-                        <input type="text" id="tx-name" placeholder="Título (ex: Mercado, Salário)" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
+                        <input type="text" id="tx-name" placeholder="Título" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
                         <div class="grid grid-cols-2 gap-4">
                             <input type="number" id="tx-amount" placeholder="Valor R$" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
                             <select id="tx-cat" class="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-500 outline-none">
@@ -541,14 +526,28 @@
                             <label id="date-label" class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Data Vencimento</label>
                             <input type="date" id="tx-date" value="${getISO(new Date())}" class="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-500 outline-none">
                         </div>
-                        
                         <div id="expense-options" class="space-y-4">
                             <div class="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                                <input type="checkbox" id="tx-parcelar" onchange="toggleParc()" class="w-5 h-5 accent-emerald-600">
-                                <label for="tx-parcelar" class="text-sm font-bold text-slate-600">Parcelar este gasto?</label>
+                                <input type="checkbox" id="tx-recorrente" onchange="toggleRec()" class="w-5 h-5 accent-emerald-600">
+                                <label for="tx-recorrente" class="text-sm font-bold text-slate-600">Repetir / Parcelar?</label>
                             </div>
-                            <div id="parc-area" class="hidden">
-                                <input type="number" id="tx-num-parc" placeholder="Quantas parcelas? (ex: 12)" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
+                            <div id="rec-area" class="hidden space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Frequência</label>
+                                        <select id="tx-freq" class="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-500 outline-none">
+                                            <option value="diario">Diário</option>
+                                            <option value="semanal">Semanal</option>
+                                            <option value="quinzenal">Quinzenal</option>
+                                            <option value="mensal" selected>Mensal</option>
+                                            <option value="anual">Anual</option>
+                                        </select>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Parcelas</label>
+                                        <input type="number" id="tx-num-parc" placeholder="Ex: 12" class="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none" value="1">
+                                    </div>
+                                </div>
                             </div>
                             <div class="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
                                 <input type="checkbox" id="tx-paid" class="w-5 h-5 accent-emerald-600">
@@ -556,10 +555,9 @@
                             </div>
                         </div>
                     </div>
-
                     <div class="flex gap-4 pt-4">
                         <button onclick="closeModal()" class="flex-1 py-4 text-slate-400 font-bold">Cancelar</button>
-                        <button onclick="confirmTx()" class="flex-1 py-4 bg-emerald-600 text-white rounded-[1.5rem] font-black shadow-xl active:scale-95 transition-all">Confirmar</button>
+                        <button onclick="confirmTx()" class="flex-1 py-4 bg-emerald-600 text-white rounded-[1.5rem] font-black shadow-xl">Confirmar</button>
                     </div>
                 </div>
             `;
@@ -573,7 +571,6 @@
             const btnExp = document.getElementById('btn-exp');
             const label = document.getElementById('date-label');
             const opt = document.getElementById('expense-options');
-            
             txType.value = type;
             if(type === 'income') {
                 btnInc.className = 'flex-1 py-3 rounded-xl font-black text-[10px] uppercase bg-white text-emerald-600 shadow-sm';
@@ -588,9 +585,9 @@
             }
         }
 
-        function toggleParc() {
-            const check = document.getElementById('tx-parcelar').checked;
-            document.getElementById('parc-area').classList.toggle('hidden', !check);
+        function toggleRec() {
+            const check = document.getElementById('tx-recorrente').checked;
+            document.getElementById('rec-area').classList.toggle('hidden', !check);
         }
 
         function confirmTx() {
@@ -599,32 +596,34 @@
             const amount = parseFloat(document.getElementById('tx-amount').value);
             const cat = document.getElementById('tx-cat').value;
             const dateStr = document.getElementById('tx-date').value;
-            const isParcelar = document.getElementById('tx-parcelar')?.checked;
+            const isRecorrente = document.getElementById('tx-recorrente')?.checked;
+            const freq = document.getElementById('tx-freq')?.value || 'mensal';
             const numParc = parseInt(document.getElementById('tx-num-parc')?.value) || 1;
             const isPaid = document.getElementById('tx-paid')?.checked;
 
-            if(!name || isNaN(amount)) return alert('Preencha os campos obrigatórios');
+            if(!name || isNaN(amount)) return;
 
-            if(type === 'expense' && isParcelar && numParc > 1) {
+            if(type === 'expense' && isRecorrente && numParc > 1) {
                 const baseDate = new Date(dateStr + 'T00:00:00');
                 for(let i=0; i < numParc; i++) {
                     const d = new Date(baseDate);
-                    d.setMonth(baseDate.getMonth() + i);
+                    
+                    if(freq === 'diario') d.setDate(baseDate.getDate() + i);
+                    else if(freq === 'semanal') d.setDate(baseDate.getDate() + (i * 7));
+                    else if(freq === 'quinzenal') d.setDate(baseDate.getDate() + (i * 15));
+                    else if(freq === 'mensal') d.setMonth(baseDate.getMonth() + i);
+                    else if(freq === 'anual') d.setFullYear(baseDate.getFullYear() + i);
+
                     state.transactions.push({
                         id: Math.random().toString(36).substr(2, 9),
                         name: `${name} (${String(i+1).padStart(2, '0')}/${String(numParc).padStart(2, '0')})`,
-                        amount: amount, 
-                        category: cat,
-                        date: getISO(d),
-                        type: 'expense',
-                        status: (i === 0 && isPaid) ? 'paid' : 'open'
+                        amount, category: cat, date: getISO(d), type: 'expense', status: (i === 0 && isPaid) ? 'paid' : 'open'
                     });
                 }
             } else {
                 state.transactions.push({
                     id: Math.random().toString(36).substr(2, 9),
-                    name, amount, category: cat, date: dateStr, type, 
-                    status: (type === 'income' || isPaid) ? 'paid' : 'open'
+                    name, amount, category: cat, date: dateStr, type, status: (type === 'income' || isPaid) ? 'paid' : 'open'
                 });
             }
             closeModal();
@@ -637,12 +636,12 @@
             content.innerHTML = `
                 <div class="space-y-6">
                     <h3 class="text-2xl font-black text-slate-800">Nova Meta</h3>
-                    <input type="text" id="goal-name" placeholder="Ex: Viagem, Reserva" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
-                    <input type="number" id="goal-target" placeholder="Valor Objetivo R$" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
-                    <input type="number" id="goal-current" placeholder="Já tenho (opcional)" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none" value="0">
+                    <input type="text" id="goal-name" placeholder="Nome" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold outline-none">
+                    <input type="number" id="goal-target" placeholder="Objetivo R$" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold outline-none">
+                    <input type="number" id="goal-current" placeholder="Já tenho" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold outline-none" value="0">
                     <div class="flex gap-4 pt-4">
                         <button onclick="closeModal()" class="flex-1 py-4 text-slate-400 font-bold">Cancelar</button>
-                        <button onclick="confirmGoal()" class="flex-1 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-xl">Criar Meta</button>
+                        <button onclick="confirmGoal()" class="flex-1 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-xl">Criar</button>
                     </div>
                 </div>
             `;
@@ -662,12 +661,10 @@
 
         function closeModal() { document.getElementById('modal-overlay').classList.remove('active'); }
 
-        // Bloqueio de zoom duplo para melhor sensação de App
         document.addEventListener('touchstart', function (event) {
             if (event.touches.length > 1) { event.preventDefault(); }
         }, { passive: false });
 
-        // --- INICIALIZAÇÃO ---
         window.onload = () => {
             load();
             render();
