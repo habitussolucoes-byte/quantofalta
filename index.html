@@ -4,8 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Quanto Falta? - Controle Financeiro</title>
-    <!-- Bibliotecas via CDN Padrão (Sem módulos) -->
+    <title>Quanto Falta? - Controle de Liquidez</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
@@ -14,22 +13,25 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; animation: fadeIn 0.2s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .nav-btn.active { color: #059669; }
-        .nav-btn.active i { transform: scale(1.1); color: #059669; }
+        .nav-btn.active { color: #059669 !important; }
+        .nav-btn.active i { transform: scale(1.1); color: #059669 !important; }
         .modal-overlay { display: none; }
         .modal-overlay.active { display: flex; }
         input, select, button { outline: none !important; }
-        /* Melhorar visual do scroll no Android */
+        /* Garante que o clique em botões e spans não seja interceptado por ícones */
+        button *, span * { pointer-events: none; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .error-shake { animation: shake 0.4s ease-in-out; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
     </style>
 <script type="importmap">
 {
   "imports": {
-    "date-fns": "https://esm.sh/date-fns@^4.1.0",
-    "react": "https://esm.sh/react@^19.2.3",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "react/": "https://esm.sh/react@^19.2.3/"
+    "date-fns": "https://esm.sh/date-fns@^4.1.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3"
   }
 }
 </script>
@@ -44,38 +46,33 @@
             </h1>
         </div>
         <nav class="flex-1 px-4 space-y-2">
-            <button onclick="switchTab('dashboard')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400 active" data-tab="dashboard">
-                <i data-lucide="layout-dashboard"></i> Início
+            <button onclick="window.switchTab('dashboard')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400 active" data-tab="dashboard">
+                <i data-lucide="layout-dashboard"></i> Dashboard
             </button>
-            <button onclick="switchTab('transactions')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400" data-tab="transactions">
-                <i data-lucide="receipt"></i> Extrato
+            <button onclick="window.switchTab('transactions')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400" data-tab="transactions">
+                <i data-lucide="receipt"></i> Minhas Contas
             </button>
-            <button onclick="switchTab('insights')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400" data-tab="insights">
-                <i data-lucide="pie-chart"></i> Análise
-            </button>
-            <button onclick="switchTab('goals')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400" data-tab="goals">
+            <button onclick="window.switchTab('goals')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400" data-tab="goals">
                 <i data-lucide="target"></i> Metas
             </button>
-            <button onclick="switchTab('settings')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400" data-tab="settings">
-                <i data-lucide="settings"></i> Ajustes
+            <button onclick="window.switchTab('settings')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400" data-tab="settings">
+                <i data-lucide="settings"></i> Bancos e ajustes
             </button>
         </nav>
     </aside>
 
     <!-- Mobile Bottom Nav -->
     <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around p-3 z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
-        <button onclick="switchTab('dashboard')" class="nav-btn flex flex-col items-center text-slate-300 active" data-tab="dashboard"><i data-lucide="layout-dashboard"></i></button>
-        <button onclick="switchTab('transactions')" class="nav-btn flex flex-col items-center text-slate-300" data-tab="transactions"><i data-lucide="receipt"></i></button>
-        <button onclick="switchTab('insights')" class="nav-btn flex flex-col items-center text-slate-300" data-tab="insights"><i data-lucide="pie-chart"></i></button>
-        <button onclick="switchTab('goals')" class="nav-btn flex flex-col items-center text-slate-300" data-tab="goals"><i data-lucide="target"></i></button>
-        <button onclick="switchTab('settings')" class="nav-btn flex flex-col items-center text-slate-300" data-tab="settings"><i data-lucide="settings"></i></button>
+        <button onclick="window.switchTab('dashboard')" class="nav-btn flex flex-col items-center text-slate-300 active" data-tab="dashboard"><i data-lucide="layout-dashboard"></i></button>
+        <button onclick="window.switchTab('transactions')" class="nav-btn flex flex-col items-center text-slate-300" data-tab="transactions"><i data-lucide="receipt"></i></button>
+        <button onclick="window.switchTab('goals')" class="nav-btn flex flex-col items-center text-slate-300" data-tab="goals"><i data-lucide="target"></i></button>
+        <button onclick="window.switchTab('settings')" class="nav-btn flex flex-col items-center text-slate-300" data-tab="settings"><i data-lucide="settings"></i></button>
     </nav>
 
     <!-- Main Content -->
     <main class="p-4 md:p-10 max-w-5xl mx-auto">
         <div id="tab-dashboard" class="tab-content active"></div>
         <div id="tab-transactions" class="tab-content"></div>
-        <div id="tab-insights" class="tab-content"></div>
         <div id="tab-goals" class="tab-content"></div>
         <div id="tab-settings" class="tab-content"></div>
     </main>
@@ -86,589 +83,519 @@
     </div>
 
     <script>
-        // --- ESTADO GLOBAL (LOCALSTORAGE) ---
+        // --- ESTADO ---
         let state = {
+            banks: [], 
             transactions: [],
-            categories: ['Alimentação', 'Transporte', 'Lazer', 'Moradia', 'Saúde', 'Trabalho'],
             goals: [],
-            activeTab: 'dashboard',
-            lastSyncMonth: '' // YYYY-MM
+            savingsPool: 0,
+            categories: ['Alimentação', 'Transporte', 'Lazer', 'Moradia', 'Saúde', 'Internet', 'Serviços', 'Cartão de Crédito', 'Outros'],
+            activeTab: 'dashboard'
         };
 
-        // Filtros Temporários (Não salvos no Storage)
-        let filters = {
-            month: '', // YYYY-MM
-            onlyOpen: false,
-            sortOrder: 'desc' // 'desc' ou 'asc'
-        };
+        let filters = { onlyOpen: true, sortOrder: 'asc' };
 
-        // --- UTILITÁRIOS ---
         const fmtBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
         const getISO = (d) => d.toISOString().split('T')[0];
-        
-        function save() {
-            localStorage.setItem('quanto_falta_v2_db', JSON.stringify(state));
-            render();
-        }
+        const generateUID = () => 'u' + Date.now() + Math.random().toString(36).substr(2, 5);
+        const getTotalAllocated = () => state.goals.reduce((a, g) => a + g.current, 0);
 
-        function load() {
-            const data = localStorage.getItem('quanto_falta_v2_db');
+        // Funções de Persistência
+        window.save = () => { 
+            localStorage.setItem('quanto_falta_v17_db', JSON.stringify(state)); 
+            window.render(); 
+        };
+
+        window.load = () => {
+            const data = localStorage.getItem('quanto_falta_v17_db');
             if (data) state = JSON.parse(data);
-            syncMonth();
-        }
-
-        // Sincronização automática na virada do mês
-        function syncMonth() {
-            const now = new Date();
-            const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            
-            if (state.lastSyncMonth !== currentKey) {
-                state.transactions.forEach(tx => {
-                    const txDate = new Date(tx.date + 'T00:00:00');
-                    if (tx.type === 'expense' && tx.status === 'open' && txDate < new Date(now.getFullYear(), now.getMonth(), 1)) {
-                        tx.status = 'overdue';
-                    }
-                });
-                state.lastSyncMonth = currentKey;
-                save();
+            if (!state.categories || state.categories.length === 0) {
+                state.categories = ['Alimentação', 'Transporte', 'Lazer', 'Moradia', 'Saúde', 'Internet', 'Serviços', 'Cartão de Crédito', 'Outros'];
             }
-        }
+        };
 
-        // --- NAVEGAÇÃO ---
-        function switchTab(tabId) {
+        // Funções de Navegação
+        window.switchTab = (tabId) => {
             state.activeTab = tabId;
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.getElementById('tab-' + tabId).classList.add('active');
+            const target = document.getElementById('tab-' + tabId);
+            if (target) target.classList.add('active');
             
             document.querySelectorAll('.nav-btn').forEach(b => {
                 b.classList.remove('active');
                 if (b.dataset.tab === tabId) b.classList.add('active');
             });
-            render();
-        }
+            window.render();
+        };
 
-        // --- RENDERIZADORES ---
-        function render() {
+        // Funções de Categoria (Ações Globais)
+        window.editCat = (index) => {
+            const oldName = state.categories[index];
+            if (!oldName) return;
+            
+            const newName = prompt('Digite o novo nome para a categoria:', oldName);
+            if (newName && newName.trim() !== "" && newName.trim() !== oldName) {
+                const cleanedName = newName.trim();
+                
+                // Atualiza a categoria no array
+                state.categories[index] = cleanedName;
+                
+                // Sincroniza transações existentes para não perder o vínculo
+                state.transactions.forEach(t => {
+                    if (t.category === oldName) t.category = cleanedName;
+                });
+                
+                window.save();
+            }
+        };
+
+        window.delCat = (index) => {
+            const catName = state.categories[index];
+            if (!catName) return;
+            
+            if (confirm(`Tem certeza que deseja excluir a categoria "${catName}"?`)) {
+                state.categories.splice(index, 1);
+                window.save();
+            }
+        };
+
+        window.addCat = () => { 
+            const i = document.getElementById('new-cat-input'); 
+            if (i && i.value.trim()){ 
+                const val = i.value.trim();
+                if (!state.categories.includes(val)) {
+                    state.categories.push(val); 
+                    i.value = ''; 
+                    window.save(); 
+                } else {
+                    alert('Esta categoria já existe.');
+                }
+            } 
+        };
+
+        // --- RENDERIZAÇÃO ---
+        window.render = () => {
             const tab = state.activeTab;
             if (tab === 'dashboard') renderDashboard();
             if (tab === 'transactions') renderTransactions();
-            if (tab === 'insights') renderInsights();
             if (tab === 'goals') renderGoals();
             if (tab === 'settings') renderSettings();
             if (window.lucide) lucide.createIcons();
-        }
+        };
 
         function renderDashboard() {
-            const now = new Date();
-            const todayISO = getISO(now);
-            const monthTx = state.transactions.filter(tx => {
-                const d = new Date(tx.date + 'T00:00:00');
-                return (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) || tx.status === 'overdue';
-            });
-
-            const income = monthTx.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
-            const expenses = monthTx.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
-            const unpaid = monthTx.filter(t => t.type === 'expense' && t.status !== 'paid').reduce((a, b) => a + b.amount, 0);
+            const totalBanks = state.banks.reduce((a, b) => a + b.balance, 0);
+            const unpaid = state.transactions.filter(tx => tx.type === 'expense' && tx.status !== 'paid').reduce((a, b) => a + b.amount, 0);
+            const incomePending = state.transactions.filter(tx => tx.type === 'income' && tx.status !== 'paid').reduce((a, b) => a + b.amount, 0);
             
-            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-            const daysLeft = Math.max(1, daysInMonth - now.getDate() + 1);
-            const dailyGoal = unpaid / daysLeft;
-
-            const nextUrgent = monthTx.filter(t => t.type === 'expense' && t.status !== 'paid')
-                                     .sort((a,b) => a.date.localeCompare(b.date))[0];
-
-            let urgentLabel = "";
-            let urgentClass = "text-slate-400";
-            let urgentIconClass = "bg-amber-50 text-amber-600";
-
-            if (nextUrgent) {
-                const isOverdue = nextUrgent.date < todayISO || nextUrgent.status === 'overdue';
-                urgentLabel = isOverdue ? "JÁ ESTÁ VENCIDO" : "Vence dia " + nextUrgent.date.split('-').reverse().slice(0,2).join('/');
-                if (isOverdue) {
-                    urgentClass = "text-rose-600 font-black";
-                    urgentIconClass = "bg-rose-50 text-rose-500";
-                }
-            }
+            const diff = (totalBanks + incomePending) - unpaid;
+            const needsMoney = diff < 0;
 
             document.getElementById('tab-dashboard').innerHTML = `
-                <div class="space-y-6">
+                <div class="space-y-8">
                     <header class="flex justify-between items-center">
-                        <div>
-                            <h2 class="text-3xl font-black text-slate-800">Início</h2>
-                            <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Resumo de ${now.toLocaleDateString('pt-BR', {month:'long'})}</p>
-                        </div>
-                        <button onclick="openTxModal()" class="bg-emerald-600 text-white p-4 rounded-[1.5rem] shadow-xl shadow-emerald-100 active:scale-90 transition-all">
-                            <i data-lucide="plus"></i>
-                        </button>
+                        <h2 class="text-3xl font-black text-slate-800">Dashboard</h2>
+                        <button onclick="window.openTxModal()" class="bg-emerald-600 text-white p-4 rounded-[1.5rem] shadow-xl"><i data-lucide="plus"></i></button>
                     </header>
-
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Entradas</p>
-                            <p class="text-2xl font-black text-emerald-600">${fmtBRL(income)}</p>
-                        </div>
-                        <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Gastos</p>
-                            <p class="text-2xl font-black text-rose-600">${fmtBRL(expenses)}</p>
-                        </div>
-                        <div class="bg-white p-6 rounded-[2rem] border border-amber-100 shadow-sm ring-4 ring-amber-50">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">A Pagar</p>
-                            <p class="text-2xl font-black text-amber-600">${fmtBRL(unpaid)}</p>
-                        </div>
+                    <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${state.banks.map(b => `
+                            <div class="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-center">
+                                <div class="flex items-center gap-4">
+                                    <div class="bg-slate-50 p-3 rounded-2xl text-slate-400"><i data-lucide="landmark"></i></div>
+                                    <p class="font-bold text-slate-700">${b.name}</p>
+                                </div>
+                                <p class="font-black text-emerald-600">${fmtBRL(b.balance)}</p>
+                            </div>`).join('')}
+                    </section>
+                    <div class="${needsMoney ? 'bg-slate-900' : 'bg-emerald-600'} text-white p-8 rounded-[2.5rem] shadow-2xl">
+                        <h3 class="text-xs font-black text-emerald-400 uppercase tracking-widest mb-4">${needsMoney ? 'Falta para Quitar' : 'Saldo Livre'}</h3>
+                        <span class="text-4xl font-black">${fmtBRL(Math.abs(diff))}</span>
+                        <p class="text-[10px] text-white/50 mt-4 uppercase font-bold tracking-tighter">Considerando Bancos + Receitas a receber</p>
                     </div>
-
-                    <div class="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
-                        <div class="relative z-10">
-                            <h3 class="text-xs font-black text-emerald-400 uppercase tracking-[0.3em] mb-4">Análise Diária</h3>
-                            <p class="text-sm text-slate-300 leading-relaxed mb-6">Faltam <span class="text-white font-black">${daysLeft} dias</span> para o fim do mês. Você precisa de <span class="text-emerald-400 font-black">${fmtBRL(dailyGoal)}/dia</span> para quitar suas pendências sem dívidas extras.</p>
-                            <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden">
-                                <div class="bg-emerald-500 h-full transition-all duration-1000" style="width: ${Math.min(100, (income / (expenses || 1)) * 100)}%"></div>
-                            </div>
-                        </div>
-                        <div class="absolute -right-10 -bottom-10 opacity-10">
-                            <i data-lucide="trending-up" class="w-40 h-40"></i>
-                        </div>
-                    </div>
-
-                    ${nextUrgent ? `
-                    <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex items-center justify-between">
-                        <div class="flex items-center gap-5">
-                            <div class="p-4 ${urgentIconClass} rounded-2xl"><i data-lucide="alert-circle"></i></div>
-                            <div>
-                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Próxima Urgência</p>
-                                <p class="text-xl font-black text-slate-800">${nextUrgent.name}</p>
-                                <p class="text-sm font-bold ${urgentClass}">
-                                    ${urgentLabel}
-                                </p>
-                            </div>
-                        </div>
-                        <button onclick="payTx('${nextUrgent.id}')" class="bg-emerald-50 text-emerald-600 p-3 rounded-2xl active:bg-emerald-600 active:text-white transition-all">
-                            <i data-lucide="check"></i>
-                        </button>
-                    </div>
-                    ` : ''}
-                </div>
-            `;
+                </div>`;
         }
 
         function renderTransactions() {
-            // Aplicar Filtros
-            let filtered = [...state.transactions];
-
-            // 1. Filtro de Faturas em Aberto
-            if (filters.onlyOpen) {
-                filtered = filtered.filter(tx => tx.type === 'expense' && (tx.status === 'open' || tx.status === 'overdue'));
-            }
-
-            // 2. Filtro de Mês
-            if (filters.month) {
-                filtered = filtered.filter(tx => tx.date.startsWith(filters.month));
-            }
-
-            // 3. Ordenação
+            let filtered = state.transactions;
+            if (filters.onlyOpen) filtered = filtered.filter(tx => tx.status !== 'paid');
+            
             filtered.sort((a, b) => {
-                const comparison = a.date.localeCompare(b.date);
-                return filters.sortOrder === 'desc' ? -comparison : comparison;
+                const cmp = a.date.localeCompare(b.date);
+                return filters.sortOrder === 'asc' ? cmp : -cmp;
             });
 
             document.getElementById('tab-transactions').innerHTML = `
                 <div class="space-y-6">
-                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <h2 class="text-3xl font-black text-slate-800">Extrato</h2>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <!-- Seletor de Mês -->
-                            <div class="relative">
-                                <input type="month" 
-                                       value="${filters.month}" 
-                                       onchange="updateFilter('month', this.value)" 
-                                       class="bg-white border border-slate-200 text-xs font-bold text-slate-600 px-4 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all">
-                            </div>
-
-                            <!-- Filtro Apenas Abertos -->
-                            <button onclick="updateFilter('onlyOpen', ${!filters.onlyOpen})" 
-                                    class="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-black transition-all ${filters.onlyOpen ? 'bg-amber-600 border-amber-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-400'}">
-                                <i data-lucide="clock" class="w-3 h-3"></i> 
-                                ${filters.onlyOpen ? 'EM ABERTO' : 'TODOS'}
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-3xl font-black text-slate-800">Contas</h2>
+                        <div class="flex gap-2">
+                            <button onclick="filters.sortOrder = (filters.sortOrder === 'asc' ? 'desc' : 'asc'); window.render();" class="px-4 py-2 rounded-xl text-[10px] font-black border uppercase bg-white text-slate-600 flex items-center gap-2">
+                                <i data-lucide="${filters.sortOrder === 'asc' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow'}" class="w-3 h-3"></i>
+                                ${filters.sortOrder === 'asc' ? 'Crescente' : 'Decrescente'}
                             </button>
-
-                            <!-- Ordenação -->
-                            <button onclick="updateFilter('sortOrder', '${filters.sortOrder === 'desc' ? 'asc' : 'desc'}')" 
-                                    class="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-600 active:scale-95 transition-all">
-                                <i data-lucide="${filters.sortOrder === 'desc' ? 'arrow-down-narrow-wide' : 'arrow-up-narrow-wide'}" class="w-3 h-3 text-emerald-500"></i>
-                                ${filters.sortOrder === 'desc' ? 'RECENTES' : 'ANTIGOS'}
-                            </button>
+                            <button onclick="filters.onlyOpen = !filters.onlyOpen; window.render();" class="px-4 py-2 rounded-xl text-[10px] font-black border uppercase ${filters.onlyOpen ? 'bg-emerald-600 text-white' : 'bg-white text-slate-400'}">Abertas</button>
                         </div>
                     </div>
-
-                    <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden overflow-x-auto">
-                        <table class="w-full text-left min-w-[600px]">
-                            <thead class="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                <tr>
-                                    <th class="px-6 py-5">Item</th>
-                                    <th class="px-6 py-5">Data</th>
-                                    <th class="px-6 py-5">Categoria</th>
-                                    <th class="px-6 py-5 text-right">Valor</th>
-                                    <th class="px-6 py-5"></th>
-                                </tr>
+                    <div class="bg-white rounded-[2rem] border overflow-hidden">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase">
+                                <tr><th class="px-6 py-4">Item</th><th class="px-6 py-4 text-right">Valor</th><th class="px-6 py-4"></th></tr>
                             </thead>
                             <tbody class="divide-y divide-slate-50">
                                 ${filtered.map(tx => `
-                                <tr class="hover:bg-slate-50/50 transition-colors">
-                                    <td class="px-6 py-5 font-bold text-slate-700">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-2 h-2 rounded-full ${tx.type === 'income' ? 'bg-emerald-500' : (tx.status === 'overdue' ? 'bg-rose-600 animate-pulse' : (tx.status === 'open' ? 'bg-amber-500' : 'bg-slate-300'))}"></div>
-                                            ${tx.name}
-                                        </div>
+                                <tr>
+                                    <td class="px-6 py-4">
+                                        <p class="font-bold text-slate-700">${tx.name}</p>
+                                        <p class="text-[9px] text-slate-400 uppercase font-black">${tx.type === 'income' ? 'Receita' : 'Gasto'} • ${tx.category} • ${tx.date.split('-').reverse().slice(0,2).join('/')}</p>
                                     </td>
-                                    <td class="px-6 py-5 text-slate-400 text-sm font-medium">${tx.date.split('-').reverse().join('/')}</td>
-                                    <td class="px-6 py-5"><span class="bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-black text-slate-500 uppercase">${tx.category}</span></td>
-                                    <td class="px-6 py-5 text-right font-black ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-800'}">
-                                        ${tx.type === 'income' ? '+' : '-'}${fmtBRL(tx.amount)}
+                                    <td class="px-6 py-4 text-right font-black ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-800'}">${tx.type === 'income' ? '+' : ''}${fmtBRL(tx.amount)}</td>
+                                    <td class="px-6 py-4 text-right flex justify-end gap-2">
+                                        ${tx.status !== 'paid' ? `<button onclick="${tx.type === 'expense' ? `window.openPayModal('${tx.id}')` : `window.markPaid('${tx.id}')`}" class="text-emerald-500 p-2"><i data-lucide="check"></i></button>` : ''}
+                                        <button onclick="window.delTx('${tx.id}')" class="text-slate-200 hover:text-rose-500 p-2"><i data-lucide="trash-2"></i></button>
                                     </td>
-                                    <td class="px-6 py-5 text-right">
-                                        <div class="flex justify-end gap-2">
-                                            ${tx.status !== 'paid' && tx.type === 'expense' ? `<button onclick="payTx('${tx.id}')" class="text-emerald-500 p-2 hover:bg-emerald-50 rounded-lg transition-all"><i data-lucide="check"></i></button>` : ''}
-                                            <button onclick="delTx('${tx.id}')" class="text-slate-200 hover:text-rose-500 p-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                `).join('')}
+                                </tr>`).join('')}
+                                ${filtered.length === 0 ? '<tr><td colspan="3" class="p-10 text-center text-slate-400 italic">Nada para mostrar.</td></tr>' : ''}
                             </tbody>
                         </table>
-                        ${filtered.length === 0 ? '<div class="p-20 text-center text-slate-300 italic">Nenhum registro encontrado com estes filtros.</div>' : ''}
                     </div>
-                </div>
-            `;
-            if (window.lucide) lucide.createIcons();
-        }
-
-        // --- FILTROS ---
-        function updateFilter(key, value) {
-            filters[key] = value;
-            renderTransactions();
-        }
-
-        function renderInsights() {
-            const expenses = state.transactions.filter(t => t.type === 'expense');
-            const stats = {};
-            expenses.forEach(t => {
-                if(!stats[t.category]) stats[t.category] = { count: 0, total: 0 };
-                stats[t.category].count++;
-                stats[t.category].total += t.amount;
-            });
-            const sortedStats = Object.entries(stats).sort((a,b) => b[1].count - a[1].count);
-
-            document.getElementById('tab-insights').innerHTML = `
-                <div class="space-y-8">
-                    <header>
-                        <h2 class="text-3xl font-black text-slate-800">Análise de Hábitos</h2>
-                        <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-1">Identifique seus maiores ralos de dinheiro</p>
-                    </header>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                            <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-8">Frequência por Categoria</h3>
-                            <div class="space-y-6">
-                                ${sortedStats.map(([name, data]) => `
-                                <div>
-                                    <div class="flex justify-between mb-2">
-                                        <span class="font-bold text-slate-700">${name}</span>
-                                        <span class="text-[10px] font-black text-slate-400 uppercase">${data.count} vezes</span>
-                                    </div>
-                                    <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                                        <div class="bg-blue-500 h-full" style="width: ${(data.count / Math.max(...sortedStats.map(s=>s[1].count))) * 100}%"></div>
-                                    </div>
-                                    <p class="text-right font-black text-slate-400 mt-1 text-[10px]">${fmtBRL(data.total)} acumulado</p>
-                                </div>
-                                `).join('')}
-                                ${sortedStats.length === 0 ? '<div class="text-center py-10 text-slate-300 italic">Sem dados suficientes para análise.</div>' : ''}
-                            </div>
-                        </div>
-                        <div class="bg-emerald-600 p-8 rounded-[2.5rem] text-white shadow-xl">
-                            <i data-lucide="zap" class="mb-4"></i>
-                            <h4 class="text-xl font-black mb-3">Dica Financeira</h4>
-                            <p class="text-emerald-50 text-sm leading-relaxed">
-                                Notamos que você gasta com frequência em <strong>${sortedStats[0]?.[0] || 'algumas categorias'}</strong>. 
-                                Gastos de alta frequência (os famosos "gastos formiga") costumam somar valores altos sem você perceber. 
-                                Tente reduzir a quantidade de vezes que gasta nessas categorias no próximo mês!
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            `;
+                </div>`;
         }
 
         function renderGoals() {
+            const allocated = getTotalAllocated();
+            const free = Math.max(0, state.savingsPool - allocated);
+
             document.getElementById('tab-goals').innerHTML = `
                 <div class="space-y-8">
-                    <div class="flex justify-between items-center">
+                    <header class="flex justify-between items-center">
                         <h2 class="text-3xl font-black text-slate-800">Metas</h2>
-                        <button onclick="openGoalModal()" class="bg-blue-600 text-white p-4 rounded-[1.5rem] shadow-xl"><i data-lucide="plus"></i></button>
+                        <button onclick="window.openGoalModal()" class="bg-blue-600 text-white p-4 rounded-[1.5rem] shadow-xl"><i data-lucide="plus"></i></button>
+                    </header>
+                    <div class="bg-white p-8 rounded-[2.5rem] border-2 border-slate-100 flex flex-col gap-6">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-4">
+                                <div class="bg-emerald-50 p-4 rounded-full text-emerald-600"><i data-lucide="piggy-bank"></i></div>
+                                <div><p class="text-[10px] font-black text-slate-400 uppercase">Reserva Física Total</p><h3 class="text-2xl font-black">${fmtBRL(state.savingsPool)}</h3></div>
+                            </div>
+                            <button onclick="window.openSupplyPoolModal()" class="px-6 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase">Ajustar Saldo</button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                                <p class="text-[9px] font-black text-blue-400 uppercase">Livre p/ Alocar</p><p class="text-lg font-black text-blue-700">${fmtBRL(free)}</p>
+                            </div>
+                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <p class="text-[9px] font-black text-slate-400 uppercase">Comprometido</p><p class="text-lg font-black text-slate-700">${fmtBRL(allocated)}</p>
+                            </div>
+                        </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         ${state.goals.map(g => {
-                            const progress = (g.current / g.target) * 100;
+                            const prog = Math.min(100, (g.current / g.target) * 100);
                             return `
-                            <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden group">
-                                <div class="absolute top-0 left-0 h-1 bg-emerald-500" style="width: ${Math.min(100, progress)}%"></div>
-                                <div class="flex justify-between items-start mb-6">
-                                    <h3 class="font-black text-slate-800 text-xl">${g.name}</h3>
-                                    <button onclick="delGoal('${g.id}')" class="text-slate-200 hover:text-rose-500 transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            <div class="bg-white p-6 rounded-[2.5rem] border shadow-sm relative overflow-hidden">
+                                <div class="absolute top-0 left-0 h-1 bg-emerald-500" style="width: ${prog}%"></div>
+                                <div class="flex justify-between mb-6">
+                                    <h3 class="font-black text-slate-800 text-lg">${g.name}</h3>
+                                    <div class="flex gap-1">
+                                        <button onclick="window.openEditGoalModal('${g.id}')" class="text-slate-200 hover:text-blue-500 p-1"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                                        <button onclick="window.openDeleteGoalModal('${g.id}')" class="text-slate-200 hover:text-rose-500 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                    </div>
                                 </div>
                                 <div class="flex justify-between items-end mb-4">
-                                    <div>
-                                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Acumulado</p>
-                                        <p class="text-2xl font-black text-emerald-600">${fmtBRL(g.current)}</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Objetivo</p>
-                                        <p class="font-bold text-slate-700">${fmtBRL(g.target)}</p>
-                                    </div>
+                                    <div><p class="text-[9px] uppercase font-black text-slate-400">Progresso</p><p class="text-xl font-black text-emerald-600">${fmtBRL(g.current)}</p></div>
+                                    <div class="text-right"><p class="text-[9px] uppercase font-black text-slate-400">Meta</p><p class="font-bold text-slate-700">${fmtBRL(g.target)}</p></div>
                                 </div>
-                                <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
-                                    <div class="bg-emerald-500 h-full transition-all duration-700" style="width: ${Math.min(100, progress)}%"></div>
-                                </div>
-                                <button onclick="upGoal('${g.id}')" class="w-full mt-6 py-4 bg-slate-50 text-blue-600 rounded-2xl font-black text-xs active:bg-blue-600 active:text-white transition-all">Adicionar Valor</button>
-                            </div>
-                            `;
+                                <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden mb-4"><div class="bg-emerald-500 h-full transition-all duration-700" style="width:${prog}%"></div></div>
+                                <button onclick="window.openDistributeModal('${g.id}')" class="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase">Alocar do Porquinho</button>
+                            </div>`;
                         }).join('')}
                     </div>
-                    ${state.goals.length === 0 ? '<div class="py-20 text-center text-slate-300 italic">Crie metas para ver seu progresso aqui.</div>' : ''}
-                </div>
-            `;
+                </div>`;
         }
 
         function renderSettings() {
             document.getElementById('tab-settings').innerHTML = `
                 <div class="space-y-10">
-                    <h2 class="text-3xl font-black text-slate-800">Ajustes</h2>
-                    <div class="grid grid-cols-1 gap-10">
-                        <section class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-                            <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><i data-lucide="tag"></i> Categorias</h3>
-                            <div class="flex gap-2">
-                                <input type="text" id="new-cat" placeholder="Nova..." class="flex-1 p-3 bg-slate-50 border-none rounded-xl font-bold">
-                                <button onclick="addCat()" class="bg-emerald-600 text-white p-3 rounded-xl"><i data-lucide="plus"></i></button>
-                            </div>
-                            <div class="flex flex-wrap gap-2 pt-4">
-                                ${state.categories.map(c => `
-                                    <div class="px-4 py-2 bg-slate-50 rounded-full text-xs font-bold text-slate-600 flex items-center gap-2 border border-slate-100">
-                                        ${c} <button onclick="delCat('${c}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="x" class="w-3 h-3"></i></button>
+                    <h2 class="text-3xl font-black text-slate-800">Bancos e ajustes</h2>
+                    <section class="bg-white p-8 rounded-[2.5rem] border space-y-6">
+                        <div class="flex justify-between items-center"><h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">Meus Bancos</h3><button onclick="window.addBank()" class="text-emerald-600 font-black text-[10px] uppercase">Adicionar</button></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${state.banks.map(b => `
+                                <div class="p-4 bg-slate-50 rounded-2xl border">
+                                    <input type="text" value="${b.name}" onchange="window.updBank('${b.id}', 'name', this.value)" class="w-full bg-transparent font-black text-slate-700 border-none p-1 mb-1">
+                                    <input type="number" step="0.01" value="${b.balance}" onchange="window.updBank('${b.id}', 'balance', this.value)" class="w-full bg-white rounded-lg p-2 font-black text-emerald-600 text-sm border border-slate-100">
+                                </div>`).join('')}
+                        </div>
+                    </section>
+
+                    <section class="bg-white p-8 rounded-[2.5rem] border space-y-6">
+                        <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">Categorias</h3>
+                        <p class="text-[10px] text-slate-400 -mt-4">Clique no nome para editar ou no ícone para excluir.</p>
+                        <div class="flex gap-2">
+                            <input type="text" id="new-cat-input" placeholder="Nova Categoria" class="flex-1 p-3 bg-slate-50 border rounded-xl font-bold">
+                            <button onclick="window.addCat()" class="bg-emerald-600 text-white px-6 rounded-xl font-black uppercase text-[10px]">Add</button>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            ${state.categories.map((c, idx) => `
+                                <div class="flex items-center gap-2 bg-slate-50 border pl-4 pr-2 py-2 rounded-full hover:border-emerald-200 transition-colors">
+                                    <span onclick="window.editCat(${idx})" class="text-sm font-bold text-slate-600 cursor-pointer hover:text-emerald-600 transition-colors" title="Clique para renomear">
+                                        ${c}
+                                    </span>
+                                    <div class="flex gap-1 border-l pl-2 border-slate-200">
+                                        <button onclick="window.editCat(${idx})" class="text-slate-300 hover:text-blue-500 p-1.5 flex items-center justify-center transition-colors">
+                                            <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                                        </button>
+                                        <button onclick="window.delCat(${idx})" class="text-slate-300 hover:text-rose-500 p-1.5 flex items-center justify-center transition-colors">
+                                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                        </button>
                                     </div>
-                                `).join('')}
-                            </div>
-                        </section>
-                    </div>
-                </div>
-            `;
+                                </div>`).join('')}
+                            ${state.categories.length === 0 ? '<p class="text-slate-400 text-xs italic">Nenhuma categoria cadastrada.</p>' : ''}
+                        </div>
+                    </section>
+                </div>`;
         }
 
-        // --- ACTIONS ---
-        function payTx(id) { 
-            const tx = state.transactions.find(t=>t.id===id); 
-            if(tx){ tx.status = 'paid'; save(); } 
-        }
-
-        function delTx(id) { 
-            if(confirm('Deseja excluir este lançamento?')) {
-                state.transactions = state.transactions.filter(t=>t.id!==id); 
-                save(); 
+        // --- MODAIS E AÇÕES ---
+        let currentModalType = 'expense';
+        function setModalError(m) { 
+            const e = document.getElementById('modal-error'); 
+            if(e) {
+                e.innerText = m; 
+                e.classList.remove('hidden'); 
+                e.classList.add('error-shake'); 
+                setTimeout(()=>e.classList.remove('error-shake'), 400); 
             }
         }
+        window.closeModal = () => { document.getElementById('modal-overlay').classList.remove('active'); };
 
-        function addCat() {
-            const v = document.getElementById('new-cat').value.trim();
-            if(v && !state.categories.includes(v)) {
-                state.categories.push(v);
-                save();
-            }
-        }
-
-        function delCat(v) {
-            state.categories = state.categories.filter(c => c !== v);
-            save();
-        }
-
-        function upGoal(id) {
-            const g = state.goals.find(x => x.id === id);
-            const v = prompt(`Quanto deseja somar à meta "${g.name}"?`);
-            if(v && !isNaN(v)) {
-                g.current += parseFloat(v);
-                save();
-            }
-        }
-
-        function delGoal(id) {
-            if(confirm('Excluir esta meta?')) {
-                state.goals = state.goals.filter(x => x.id !== id);
-                save();
-            }
-        }
-
-        function openTxModal() {
-            const modal = document.getElementById('modal-overlay');
+        window.openTxModal = () => {
+            currentModalType = 'expense';
             const content = document.getElementById('modal-content');
             content.innerHTML = `
                 <div class="space-y-6">
-                    <h3 class="text-2xl font-black text-slate-800">Novo Lançamento</h3>
-                    <div class="grid grid-cols-2 gap-2 bg-slate-50 p-1.5 rounded-2xl">
-                        <button id="btn-inc" onclick="updModalType('income')" class="flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest text-slate-400">Receita</button>
-                        <button id="btn-exp" onclick="updModalType('expense')" class="flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest bg-white text-rose-600 shadow-sm">Gasto</button>
-                    </div>
-                    <input type="hidden" id="tx-type" value="expense">
-                    <div class="space-y-4">
-                        <input type="text" id="tx-name" placeholder="Título" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
-                        <div class="grid grid-cols-2 gap-4">
-                            <input type="number" id="tx-amount" placeholder="Valor R$" class="w-full p-4 bg-slate-50 rounded-2xl font-bold outline-none">
-                            <select id="tx-cat" class="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-500 outline-none">
-                                ${state.categories.map(c => `<option value="${c}">${c}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="space-y-1">
-                            <label id="date-label" class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Data Vencimento</label>
-                            <input type="date" id="tx-date" value="${getISO(new Date())}" class="w-full p-4 bg-slate-50 rounded-2xl font-bold text-slate-500 outline-none">
-                        </div>
-                        <div id="expense-options" class="space-y-4">
-                            <div class="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                                <input type="checkbox" id="tx-recorrente" onchange="toggleRec()" class="w-5 h-5 accent-emerald-600">
-                                <label for="tx-recorrente" class="text-sm font-bold text-slate-600">Repetir / Parcelar?</label>
-                            </div>
-                            <div id="rec-area" class="hidden space-y-4">
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div class="space-y-1">
-                                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Frequência</label>
-                                        <select id="tx-freq" class="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-500 outline-none">
-                                            <option value="diario">Diário</option>
-                                            <option value="semanal">Semanal</option>
-                                            <option value="quinzenal">Quinzenal</option>
-                                            <option value="mensal" selected>Mensal</option>
-                                            <option value="anual">Anual</option>
-                                        </select>
-                                    </div>
-                                    <div class="space-y-1">
-                                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Parcelas</label>
-                                        <input type="number" id="tx-num-parc" placeholder="Ex: 12" class="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none" value="1">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                                <input type="checkbox" id="tx-paid" class="w-5 h-5 accent-emerald-600">
-                                <label for="tx-paid" class="text-sm font-bold text-slate-600">Já está pago?</label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex gap-4 pt-4">
-                        <button onclick="closeModal()" class="flex-1 py-4 text-slate-400 font-bold">Cancelar</button>
-                        <button onclick="confirmTx()" class="flex-1 py-4 bg-emerald-600 text-white rounded-[1.5rem] font-black shadow-xl">Confirmar</button>
-                    </div>
-                </div>
-            `;
-            modal.classList.add('active');
-            if (window.lucide) lucide.createIcons();
-        }
-
-        function updModalType(type) {
-            const txType = document.getElementById('tx-type');
-            const btnInc = document.getElementById('btn-inc');
-            const btnExp = document.getElementById('btn-exp');
-            const label = document.getElementById('date-label');
-            const opt = document.getElementById('expense-options');
-            txType.value = type;
-            if(type === 'income') {
-                btnInc.className = 'flex-1 py-3 rounded-xl font-black text-[10px] uppercase bg-white text-emerald-600 shadow-sm';
-                btnExp.className = 'flex-1 py-3 rounded-xl font-black text-[10px] uppercase text-slate-400';
-                label.innerText = 'Data Recebimento';
-                opt.classList.add('hidden');
-            } else {
-                btnExp.className = 'flex-1 py-3 rounded-xl font-black text-[10px] uppercase bg-white text-rose-600 shadow-sm';
-                btnInc.className = 'flex-1 py-3 rounded-xl font-black text-[10px] uppercase text-slate-400';
-                label.innerText = 'Data Vencimento';
-                opt.classList.remove('hidden');
-            }
-        }
-
-        function toggleRec() {
-            const check = document.getElementById('tx-recorrente').checked;
-            document.getElementById('rec-area').classList.toggle('hidden', !check);
-        }
-
-        function confirmTx() {
-            const type = document.getElementById('tx-type').value;
-            const name = document.getElementById('tx-name').value;
-            const amount = parseFloat(document.getElementById('tx-amount').value);
-            const cat = document.getElementById('tx-cat').value;
-            const dateStr = document.getElementById('tx-date').value;
-            const isRecorrente = document.getElementById('tx-recorrente')?.checked;
-            const freq = document.getElementById('tx-freq')?.value || 'mensal';
-            const numParc = parseInt(document.getElementById('tx-num-parc')?.value) || 1;
-            const isPaid = document.getElementById('tx-paid')?.checked;
-
-            if(!name || isNaN(amount)) return;
-
-            if(type === 'expense' && isRecorrente && numParc > 1) {
-                const baseDate = new Date(dateStr + 'T00:00:00');
-                for(let i=0; i < numParc; i++) {
-                    const d = new Date(baseDate);
+                    <h3 class="text-2xl font-black text-slate-800">Nova Transação</h3>
+                    <div id="modal-error" class="hidden p-4 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-2xl"></div>
                     
-                    if(freq === 'diario') d.setDate(baseDate.getDate() + i);
-                    else if(freq === 'semanal') d.setDate(baseDate.getDate() + (i * 7));
-                    else if(freq === 'quinzenal') d.setDate(baseDate.getDate() + (i * 15));
-                    else if(freq === 'mensal') d.setMonth(baseDate.getMonth() + i);
-                    else if(freq === 'anual') d.setFullYear(baseDate.getFullYear() + i);
+                    <div class="space-y-4">
+                        <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Título</label><input type="text" id="tx-name" placeholder="Ex: Aluguel, Mercado..." class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Valor (R$)</label><input type="number" id="tx-amount" step="0.01" placeholder="0.00" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
+                            <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Categoria</label>
+                                <select id="tx-cat" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
+                                    ${state.categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Parcelas</label><input type="number" id="tx-installments" min="1" value="1" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
+                            <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Intervalo</label>
+                                <select id="tx-freq" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
+                                    <option value="monthly">Mensal</option>
+                                    <option value="fortnightly">Quinzenal</option>
+                                    <option value="weekly">Semanal</option>
+                                    <option value="daily">Diária</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Data da 1ª Parcela</label><input type="date" id="tx-date" value="${getISO(new Date())}" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
+                    </div>
+                    <div class="flex gap-4 pt-4"><button onclick="window.closeModal()" class="flex-1 font-bold text-slate-400 uppercase text-[10px]">Cancelar</button><button onclick="window.confirmTx()" class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[10px]">Salvar</button></div>
+                </div>`;
+            document.getElementById('modal-overlay').classList.add('active');
+            if(window.lucide) lucide.createIcons();
+        }
 
-                    state.transactions.push({
-                        id: Math.random().toString(36).substr(2, 9),
-                        name: `${name} (${String(i+1).padStart(2, '0')}/${String(numParc).padStart(2, '0')})`,
-                        amount, category: cat, date: getISO(d), type: 'expense', status: (i === 0 && isPaid) ? 'paid' : 'open'
-                    });
-                }
-            } else {
-                state.transactions.push({
-                    id: Math.random().toString(36).substr(2, 9),
-                    name, amount, category: cat, date: dateStr, type, status: (type === 'income' || isPaid) ? 'paid' : 'open'
+        window.confirmTx = () => {
+            const baseName = document.getElementById('tx-name').value;
+            const amount = parseFloat(document.getElementById('tx-amount').value);
+            const instCount = parseInt(document.getElementById('tx-installments').value) || 1;
+            const freq = document.getElementById('tx-freq').value;
+            const startDate = document.getElementById('tx-date').value;
+            const category = document.getElementById('tx-cat').value;
+
+            if(!baseName || isNaN(amount)) return setModalError('Preencha nome e valor');
+
+            let baseDate = new Date(startDate + 'T12:00:00');
+
+            for(let i = 0; i < instCount; i++) {
+                let currentTxDate = new Date(baseDate);
+                if (freq === 'daily') currentTxDate.setDate(baseDate.getDate() + i);
+                if (freq === 'weekly') currentTxDate.setDate(baseDate.getDate() + (i * 7));
+                if (freq === 'fortnightly') currentTxDate.setDate(baseDate.getDate() + (i * 14));
+                if (freq === 'monthly') currentTxDate.setMonth(baseDate.getMonth() + i);
+
+                const finalName = instCount > 1 ? `${baseName} (${i + 1}/${instCount})` : baseName;
+
+                state.transactions.push({ 
+                    id: generateUID(), 
+                    name: finalName, 
+                    amount, 
+                    type: currentModalType,
+                    category, 
+                    date: getISO(currentTxDate), 
+                    status: 'open' 
                 });
             }
-            closeModal();
-            save();
+            window.save(); window.closeModal();
         }
 
-        function openGoalModal() {
-            const modal = document.getElementById('modal-overlay');
+        window.openDeleteGoalModal = (id) => {
+            const g = state.goals.find(x => x.id === id);
+            const content = document.getElementById('modal-content');
+            content.innerHTML = `
+                <div class="space-y-6 text-center">
+                    <div class="mx-auto bg-rose-50 w-16 h-16 rounded-full flex items-center justify-center text-rose-500"><i data-lucide="alert-triangle"></i></div>
+                    <h3 class="text-2xl font-black text-slate-800">Excluir Meta?</h3>
+                    <p class="text-sm text-slate-500">Deseja apagar <b>"${g.name}"</b>? O saldo de <b>${fmtBRL(g.current)}</b> voltará para o porquinho.</p>
+                    <div class="flex gap-4 pt-4"><button onclick="window.closeModal()" class="flex-1 p-4 bg-slate-50 rounded-2xl font-black uppercase text-[10px]">Não</button><button onclick="window.confirmDelGoal('${id}')" class="flex-1 p-4 bg-rose-500 text-white rounded-2xl font-black uppercase text-[10px]">Sim, Excluir</button></div>
+                </div>`;
+            if (window.lucide) lucide.createIcons();
+            document.getElementById('modal-overlay').classList.add('active');
+        }
+
+        window.confirmDelGoal = (id) => { state.goals = state.goals.filter(x => x.id !== id); window.save(); window.closeModal(); }
+
+        window.openGoalModal = () => {
+            const free = Math.max(0, state.savingsPool - getTotalAllocated());
             const content = document.getElementById('modal-content');
             content.innerHTML = `
                 <div class="space-y-6">
                     <h3 class="text-2xl font-black text-slate-800">Nova Meta</h3>
-                    <input type="text" id="goal-name" placeholder="Nome" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold outline-none">
-                    <input type="number" id="goal-target" placeholder="Objetivo R$" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold outline-none">
-                    <input type="number" id="goal-current" placeholder="Já tenho" class="w-full p-4 bg-slate-50 border-none rounded-2xl font-bold outline-none" value="0">
-                    <div class="flex gap-4 pt-4">
-                        <button onclick="closeModal()" class="flex-1 py-4 text-slate-400 font-bold">Cancelar</button>
-                        <button onclick="confirmGoal()" class="flex-1 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-xl">Criar</button>
+                    <div id="modal-error" class="hidden p-4 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-2xl"></div>
+                    <input type="text" id="goal-name" placeholder="Ex: Reserva de Emergência" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="text-[9px] uppercase font-black ml-2 text-slate-400">Saldo Inicial</label><input type="number" id="goal-cur" value="0" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
+                        <div><label class="text-[9px] uppercase font-black ml-2 text-slate-400">Objetivo Final</label><input type="number" id="goal-tar" placeholder="Alvo (R$)" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
                     </div>
-                </div>
-            `;
-            modal.classList.add('active');
-            if (window.lucide) lucide.createIcons();
+                    <p class="text-[9px] text-blue-500 font-bold ml-2 italic">Disponível agora: ${fmtBRL(free)}</p>
+                    <button onclick="window.confirmGoal()" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px]">Criar Meta</button>
+                </div>`;
+            document.getElementById('modal-overlay').classList.add('active');
         }
 
-        function confirmGoal() {
-            const name = document.getElementById('goal-name').value;
-            const target = parseFloat(document.getElementById('goal-target').value);
-            const current = parseFloat(document.getElementById('goal-current').value) || 0;
-            if(!name || isNaN(target)) return;
-            state.goals.push({ id: Math.random().toString(36).substr(2, 9), name, target, current });
-            closeModal();
-            save();
+        window.confirmGoal = () => {
+            const n = document.getElementById('goal-name').value;
+            const cur = parseFloat(document.getElementById('goal-cur').value) || 0;
+            const tar = parseFloat(document.getElementById('goal-tar').value);
+            const free = state.savingsPool - getTotalAllocated();
+            if(!n || isNaN(tar)) return setModalError('Preencha os campos obrigatórios');
+            if(cur > free) return setModalError(`Saldo livre insuficiente no porquinho (${fmtBRL(free)})`);
+            state.goals.push({ id: 'g'+Date.now(), name: n, targetAmount: tar, currentAmount: cur, target: tar, current: cur });
+            window.save(); window.closeModal();
         }
 
-        function closeModal() { document.getElementById('modal-overlay').classList.remove('active'); }
+        window.openEditGoalModal = (id) => {
+            const g = state.goals.find(x => x.id === id);
+            const otherAllocated = state.goals.filter(x => x.id !== id).reduce((a, x) => a + (x.current || x.currentAmount || 0), 0);
+            const max = state.savingsPool - otherAllocated;
+            const content = document.getElementById('modal-content');
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <h3 class="text-2xl font-black text-slate-800">Editar Meta</h3>
+                    <div id="modal-error" class="hidden p-4 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-2xl"></div>
+                    <input id="edit-g-name" value="${g.name}" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label class="text-[9px] uppercase font-black ml-2">Alocado</label><input type="number" id="edit-g-cur" value="${g.current || g.currentAmount}" class="w-full p-4 bg-slate-50 border rounded-2xl font-black text-emerald-600"></div>
+                        <div><label class="text-[9px] uppercase font-black ml-2">Objetivo</label><input type="number" id="edit-g-tar" value="${g.target || g.targetAmount}" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
+                    </div>
+                    <p class="text-[9px] text-blue-500 font-bold ml-2">Máximo permitido p/ esta meta: ${fmtBRL(max)}</p>
+                    <button onclick="window.confirmEditGoal('${id}')" class="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[10px]">Salvar Alterações</button>
+                </div>`;
+            document.getElementById('modal-overlay').classList.add('active');
+        }
 
-        document.addEventListener('touchstart', function (event) {
-            if (event.touches.length > 1) { event.preventDefault(); }
-        }, { passive: false });
+        window.confirmEditGoal = (id) => {
+            const g = state.goals.find(x => x.id === id);
+            const newCur = parseFloat(document.getElementById('edit-g-cur').value) || 0;
+            const otherAllocated = state.goals.filter(x => x.id !== id).reduce((a, x) => a + (x.current || x.currentAmount || 0), 0);
+            if((otherAllocated + newCur) > state.savingsPool) return setModalError(`Saldo físico insuficiente no porquinho!`);
+            g.name = document.getElementById('edit-g-name').value;
+            g.current = newCur;
+            g.currentAmount = newCur;
+            g.target = parseFloat(document.getElementById('edit-g-tar').value);
+            g.targetAmount = g.target;
+            window.save(); window.closeModal();
+        }
 
-        window.onload = () => {
-            load();
-            render();
-        };
+        window.openDistributeModal = (id) => {
+            const free = state.savingsPool - getTotalAllocated();
+            const content = document.getElementById('modal-content');
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <h3 class="text-2xl font-black text-slate-800">Alocar Saldo</h3>
+                    <div id="modal-error" class="hidden p-4 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-2xl"></div>
+                    <div class="bg-blue-50 p-4 rounded-xl flex justify-between font-black text-blue-700"><span>Livre no Porquinho:</span><span>${fmtBRL(free)}</span></div>
+                    <input type="number" id="dist-val" placeholder="Quanto deseja mover?" class="w-full p-4 bg-slate-50 border rounded-2xl font-black text-emerald-600 text-center text-xl">
+                    <div class="flex gap-4">
+                        <button onclick="window.closeModal()" class="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black uppercase text-[10px]">Cancelar Alocação</button>
+                        <button onclick="window.confirmDist('${id}')" class="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Confirmar</button>
+                    </div>
+                </div>`;
+            document.getElementById('modal-overlay').classList.add('active');
+        }
+
+        window.confirmDist = (id) => {
+            const free = state.savingsPool - getTotalAllocated();
+            const val = parseFloat(document.getElementById('dist-val').value);
+            if(isNaN(val) || val <= 0 || val > free) return setModalError('Saldo insuficiente ou valor inválido');
+            const g = state.goals.find(x => x.id === id);
+            if(g.current !== undefined) g.current += val;
+            if(g.currentAmount !== undefined) g.currentAmount += val;
+            window.save(); window.closeModal();
+        }
+
+        window.openSupplyPoolModal = () => {
+            const content = document.getElementById('modal-content');
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <h3 class="text-2xl font-black text-slate-800 text-center">Saldo Físico</h3>
+                    <div id="modal-error" class="hidden p-4 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-2xl"></div>
+                    <p class="text-xs text-slate-500 text-center px-4">Informe o valor total em dinheiro que você possui na reserva/físico.</p>
+                    <input type="number" id="pool-new" value="${state.savingsPool}" class="w-full p-6 bg-slate-50 border-2 rounded-3xl font-black text-3xl text-center text-emerald-600">
+                    <button onclick="window.confirmPool()" class="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[10px]">Salvar Novo Total</button>
+                </div>`;
+            document.getElementById('modal-overlay').classList.add('active');
+        }
+
+        window.confirmPool = () => {
+            const val = parseFloat(document.getElementById('pool-new').value);
+            const alloc = getTotalAllocated();
+            if(isNaN(val) || val < alloc) return setModalError(`Mínimo permitido: ${fmtBRL(alloc)} (já alocado em metas)`);
+            state.savingsPool = val; window.save(); window.closeModal();
+        }
+
+        // --- AUXILIARES ---
+        window.delTx = (id) => { if(confirm('Excluir esta transação?')){ state.transactions = state.transactions.filter(t=>t.id!==id); window.save(); } }
+        window.markPaid = (id) => { const t = state.transactions.find(x=>x.id===id); if(t){ t.status = 'paid'; window.save(); } }
+        window.openPayModal = (id) => {
+            const tx = state.transactions.find(t=>t.id===id);
+            const content = document.getElementById('modal-content');
+            content.innerHTML = `
+                <div class="space-y-4">
+                    <h3 class="text-xl font-black">Pagar "${tx.name}"</h3>
+                    <p class="text-sm text-slate-500">Qual banco você usou para este pagamento?</p>
+                    <div class="space-y-2">
+                        ${state.banks.map(b=>`
+                            <button onclick="window.confirmPay('${id}','${b.id}')" class="w-full p-4 bg-slate-50 rounded-xl flex justify-between hover:bg-emerald-50 transition-all border border-transparent hover:border-emerald-100">
+                                <span>${b.name}</span>
+                                <b>${fmtBRL(b.balance)}</b>
+                            </button>`).join('')}
+                    </div>
+                    <button onclick="window.closeModal()" class="w-full text-slate-400 font-bold pt-4">Cancelar</button>
+                </div>`;
+            document.getElementById('modal-overlay').classList.add('active');
+        }
+        window.confirmPay = (tid, bid) => {
+            const t = state.transactions.find(x=>x.id===tid);
+            const b = state.banks.find(x=>x.id===bid);
+            if(t && b) { b.balance -= t.amount; t.status = 'paid'; window.save(); window.closeModal(); }
+        }
+        window.addBank = () => { state.banks.push({ id: 'b'+Date.now(), name: 'Novo Banco', balance: 0 }); window.save(); }
+        window.updBank = (id, k, v) => { const b = state.banks.find(x=>x.id===id); if(b){ b[k] = k === 'balance' ? parseFloat(v)||0 : v; window.save(); } }
+
+        // Inicialização
+        window.onload = () => { window.load(); window.render(); };
     </script>
 </body>
 </html>

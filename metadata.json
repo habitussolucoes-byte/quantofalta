@@ -1,5 +1,5 @@
 {
-  "name": "Quanto falta? v2.0",
-  "description": "App de gestão financeira pessoal otimizado, com parcelamento, recorrência e análise de gastos.",
+  "name": "Quanto falta? - Controle de Caixa",
+  "description": "Controle financeiro focado em liquidez. Compare saldo de 4 bancos contra despesas em aberto.",
   "requestFramePermissions": []
 }
