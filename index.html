@@ -18,25 +18,49 @@
         .modal-overlay { display: none; }
         .modal-overlay.active { display: flex; }
         input, select, button { outline: none !important; }
-        /* Garante que o clique em botões e spans não seja interceptado por ícones */
         button *, span * { pointer-events: none; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .error-shake { animation: shake 0.4s ease-in-out; }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        .first-access-screen { display: none; position: fixed; inset: 0; z-index: 200; background: #f8fafc; align-items: center; justify-content: center; padding: 1.5rem; }
+        .first-access-screen.active { display: flex; }
     </style>
 <script type="importmap">
 {
   "imports": {
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
     "date-fns": "https://esm.sh/date-fns@^4.1.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3"
+    "react": "https://esm.sh/react@^19.2.3",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
 </head>
 <body class="min-h-screen pb-24 md:pb-0 md:pl-64">
+
+    <!-- Tela de Primeiro Acesso -->
+    <div id="first-access" class="first-access-screen">
+        <div class="bg-white p-8 rounded-[2.5rem] shadow-2xl border w-full max-w-md text-center">
+            <div class="bg-emerald-50 w-20 h-20 rounded-3xl flex items-center justify-center text-emerald-600 mx-auto mb-6">
+                <i data-lucide="landmark" class="w-10 h-10"></i>
+            </div>
+            <h2 class="text-3xl font-black text-slate-800 mb-2">Boas-vindas!</h2>
+            <p class="text-slate-500 text-sm mb-8">Para começar a organizar sua vida financeira, cadastre seu primeiro banco ou conta.</p>
+            
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="text-[9px] font-black text-slate-400 uppercase ml-2">Nome do Banco / Conta</label>
+                    <input type="text" id="setup-bank-name" placeholder="Ex: Nubank, Carteira, Itaú..." class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
+                </div>
+                <div>
+                    <label class="text-[9px] font-black text-slate-400 uppercase ml-2">Saldo Atual (R$)</label>
+                    <input type="number" id="setup-bank-balance" step="0.01" placeholder="0,00" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
+                </div>
+                <button onclick="window.confirmSetup()" class="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-emerald-100 mt-4 transition-transform active:scale-95">
+                    Começar a usar o App
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Sidebar Desktop -->
     <aside class="hidden md:flex flex-col w-64 bg-white border-r h-screen fixed left-0 top-0 z-40">
@@ -50,7 +74,7 @@
                 <i data-lucide="layout-dashboard"></i> Dashboard
             </button>
             <button onclick="window.switchTab('transactions')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400" data-tab="transactions">
-                <i data-lucide="receipt"></i> Minhas Contas
+                <i data-lucide="receipt"></i> Contas a Pagar
             </button>
             <button onclick="window.switchTab('goals')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all text-slate-400" data-tab="goals">
                 <i data-lucide="target"></i> Metas
@@ -98,23 +122,36 @@
         const fmtBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
         const getISO = (d) => d.toISOString().split('T')[0];
         const generateUID = () => 'u' + Date.now() + Math.random().toString(36).substr(2, 5);
-        const getTotalAllocated = () => state.goals.reduce((a, g) => a + g.current, 0);
+        const getTotalAllocated = () => state.goals.reduce((a, g) => a + (g.current || g.currentAmount || 0), 0);
 
-        // Funções de Persistência
         window.save = () => { 
-            localStorage.setItem('quanto_falta_v17_db', JSON.stringify(state)); 
+            localStorage.setItem('quanto_falta_v18_db', JSON.stringify(state)); 
             window.render(); 
         };
 
         window.load = () => {
-            const data = localStorage.getItem('quanto_falta_v17_db');
+            const data = localStorage.getItem('quanto_falta_v18_db');
             if (data) state = JSON.parse(data);
             if (!state.categories || state.categories.length === 0) {
                 state.categories = ['Alimentação', 'Transporte', 'Lazer', 'Moradia', 'Saúde', 'Internet', 'Serviços', 'Cartão de Crédito', 'Outros'];
             }
         };
 
-        // Funções de Navegação
+        window.confirmSetup = () => {
+            const name = document.getElementById('setup-bank-name').value.trim();
+            const balance = parseFloat(document.getElementById('setup-bank-balance').value) || 0;
+            
+            if (!name) {
+                alert('Por favor, dê um nome à sua conta bancária.');
+                return;
+            }
+
+            state.banks.push({ id: 'b'+Date.now(), name, balance });
+            window.save();
+            document.getElementById('first-access').classList.remove('active');
+            window.render();
+        };
+
         window.switchTab = (tabId) => {
             state.activeTab = tabId;
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -128,23 +165,15 @@
             window.render();
         };
 
-        // Funções de Categoria (Ações Globais)
+        // --- CATEGORIAS ---
         window.editCat = (index) => {
             const oldName = state.categories[index];
             if (!oldName) return;
-            
-            const newName = prompt('Digite o novo nome para a categoria:', oldName);
+            const newName = prompt('Renomear categoria:', oldName);
             if (newName && newName.trim() !== "" && newName.trim() !== oldName) {
                 const cleanedName = newName.trim();
-                
-                // Atualiza a categoria no array
                 state.categories[index] = cleanedName;
-                
-                // Sincroniza transações existentes para não perder o vínculo
-                state.transactions.forEach(t => {
-                    if (t.category === oldName) t.category = cleanedName;
-                });
-                
+                state.transactions.forEach(t => { if (t.category === oldName) t.category = cleanedName; });
                 window.save();
             }
         };
@@ -152,8 +181,7 @@
         window.delCat = (index) => {
             const catName = state.categories[index];
             if (!catName) return;
-            
-            if (confirm(`Tem certeza que deseja excluir a categoria "${catName}"?`)) {
+            if (confirm(`Excluir categoria "${catName}"?`)) {
                 state.categories.splice(index, 1);
                 window.save();
             }
@@ -173,8 +201,15 @@
             } 
         };
 
-        // --- RENDERIZAÇÃO ---
+        // --- RENDER ---
         window.render = () => {
+            // Verificar Primeiro Acesso
+            if (state.banks.length === 0) {
+                document.getElementById('first-access').classList.add('active');
+                if (window.lucide) lucide.createIcons();
+                return;
+            }
+
             const tab = state.activeTab;
             if (tab === 'dashboard') renderDashboard();
             if (tab === 'transactions') renderTransactions();
@@ -185,18 +220,23 @@
 
         function renderDashboard() {
             const totalBanks = state.banks.reduce((a, b) => a + b.balance, 0);
-            const unpaid = state.transactions.filter(tx => tx.type === 'expense' && tx.status !== 'paid').reduce((a, b) => a + b.amount, 0);
-            const incomePending = state.transactions.filter(tx => tx.type === 'income' && tx.status !== 'paid').reduce((a, b) => a + b.amount, 0);
+            const unpaidExpenses = state.transactions.filter(tx => tx.status !== 'paid').reduce((a, b) => a + b.amount, 0);
             
-            const diff = (totalBanks + incomePending) - unpaid;
+            const diff = totalBanks - unpaidExpenses;
             const needsMoney = diff < 0;
+
+            const now = new Date();
+            const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            const daysRemaining = Math.max(1, lastDayOfMonth.getDate() - now.getDate() + 1);
+            const dailyMissing = Math.abs(diff) / daysRemaining;
 
             document.getElementById('tab-dashboard').innerHTML = `
                 <div class="space-y-8">
                     <header class="flex justify-between items-center">
                         <h2 class="text-3xl font-black text-slate-800">Dashboard</h2>
-                        <button onclick="window.openTxModal()" class="bg-emerald-600 text-white p-4 rounded-[1.5rem] shadow-xl"><i data-lucide="plus"></i></button>
+                        <button onclick="window.openTxModal()" class="bg-rose-500 text-white p-4 rounded-[1.5rem] shadow-xl"><i data-lucide="plus"></i></button>
                     </header>
+                    
                     <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         ${state.banks.map(b => `
                             <div class="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-center">
@@ -207,11 +247,45 @@
                                 <p class="font-black text-emerald-600">${fmtBRL(b.balance)}</p>
                             </div>`).join('')}
                     </section>
-                    <div class="${needsMoney ? 'bg-slate-900' : 'bg-emerald-600'} text-white p-8 rounded-[2.5rem] shadow-2xl">
-                        <h3 class="text-xs font-black text-emerald-400 uppercase tracking-widest mb-4">${needsMoney ? 'Falta para Quitar' : 'Saldo Livre'}</h3>
-                        <span class="text-4xl font-black">${fmtBRL(Math.abs(diff))}</span>
-                        <p class="text-[10px] text-white/50 mt-4 uppercase font-bold tracking-tighter">Considerando Bancos + Receitas a receber</p>
+
+                    <div class="${needsMoney ? 'bg-slate-900' : 'bg-emerald-600'} text-white p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
+                        <div class="relative z-10">
+                            <h3 class="text-xs font-black text-emerald-400 uppercase tracking-widest mb-4">
+                                ${needsMoney ? 'Falta para Quitar Tudo' : 'Saldo Livre no Mês'}
+                            </h3>
+                            <span class="text-4xl font-black">${fmtBRL(Math.abs(diff))}</span>
+                            <p class="text-[10px] text-white/50 mt-4 uppercase font-bold tracking-tighter">
+                                Comparativo entre saldo nos bancos vs despesas em aberto
+                            </p>
+                        </div>
+                        <i data-lucide="${needsMoney ? 'alert-triangle' : 'shield-check'}" class="absolute -right-4 -bottom-4 w-32 h-32 text-white/5 opacity-20"></i>
                     </div>
+
+                    ${needsMoney ? `
+                    <section class="bg-white p-6 rounded-[2rem] border-2 border-rose-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div class="flex items-center gap-4">
+                            <div class="bg-rose-50 p-4 rounded-2xl text-rose-500">
+                                <i data-lucide="trending-down"></i>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-black text-slate-400 uppercase">Necessário por dia para quitar</p>
+                                <h4 class="text-xl font-black text-slate-800">${fmtBRL(dailyMissing)} <span class="text-sm font-normal text-slate-400">/dia</span></h4>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[10px] font-black text-slate-400 uppercase">Fim do Mês</p>
+                            <p class="font-bold text-slate-700">${daysRemaining} dias restantes</p>
+                        </div>
+                    </section>
+                    ` : `
+                    <section class="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100 flex items-center gap-4">
+                        <div class="bg-emerald-100 p-4 rounded-2xl text-emerald-600"><i data-lucide="check-circle"></i></div>
+                        <div>
+                            <p class="text-[10px] font-black text-emerald-600 uppercase">Parabéns!</p>
+                            <h4 class="text-lg font-bold text-emerald-800 tracking-tight">Você tem saldo suficiente para todas as contas deste mês.</h4>
+                        </div>
+                    </section>
+                    `}
                 </div>`;
         }
 
@@ -233,28 +307,28 @@
                                 <i data-lucide="${filters.sortOrder === 'asc' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow'}" class="w-3 h-3"></i>
                                 ${filters.sortOrder === 'asc' ? 'Crescente' : 'Decrescente'}
                             </button>
-                            <button onclick="filters.onlyOpen = !filters.onlyOpen; window.render();" class="px-4 py-2 rounded-xl text-[10px] font-black border uppercase ${filters.onlyOpen ? 'bg-emerald-600 text-white' : 'bg-white text-slate-400'}">Abertas</button>
+                            <button onclick="filters.onlyOpen = !filters.onlyOpen; window.render();" class="px-4 py-2 rounded-xl text-[10px] font-black border uppercase ${filters.onlyOpen ? 'bg-rose-500 text-white' : 'bg-white text-slate-400'}">Apenas Abertas</button>
                         </div>
                     </div>
                     <div class="bg-white rounded-[2rem] border overflow-hidden">
                         <table class="w-full text-left">
                             <thead class="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase">
-                                <tr><th class="px-6 py-4">Item</th><th class="px-6 py-4 text-right">Valor</th><th class="px-6 py-4"></th></tr>
+                                <tr><th class="px-6 py-4">Despesa</th><th class="px-6 py-4 text-right">Valor</th><th class="px-6 py-4"></th></tr>
                             </thead>
                             <tbody class="divide-y divide-slate-50">
                                 ${filtered.map(tx => `
-                                <tr>
+                                <tr class="${tx.status === 'paid' ? 'opacity-50' : ''}">
                                     <td class="px-6 py-4">
                                         <p class="font-bold text-slate-700">${tx.name}</p>
-                                        <p class="text-[9px] text-slate-400 uppercase font-black">${tx.type === 'income' ? 'Receita' : 'Gasto'} • ${tx.category} • ${tx.date.split('-').reverse().slice(0,2).join('/')}</p>
+                                        <p class="text-[9px] text-slate-400 uppercase font-black">${tx.category} • ${tx.date.split('-').reverse().slice(0,2).join('/')}</p>
                                     </td>
-                                    <td class="px-6 py-4 text-right font-black ${tx.type === 'income' ? 'text-emerald-600' : 'text-slate-800'}">${tx.type === 'income' ? '+' : ''}${fmtBRL(tx.amount)}</td>
+                                    <td class="px-6 py-4 text-right font-black text-slate-800">${fmtBRL(tx.amount)}</td>
                                     <td class="px-6 py-4 text-right flex justify-end gap-2">
-                                        ${tx.status !== 'paid' ? `<button onclick="${tx.type === 'expense' ? `window.openPayModal('${tx.id}')` : `window.markPaid('${tx.id}')`}" class="text-emerald-500 p-2"><i data-lucide="check"></i></button>` : ''}
+                                        ${tx.status !== 'paid' ? `<button onclick="window.openPayModal('${tx.id}')" class="text-emerald-500 p-2"><i data-lucide="check"></i></button>` : '<span class="text-[8px] font-black text-emerald-600 uppercase bg-emerald-50 px-2 py-1 rounded">Pago</span>'}
                                         <button onclick="window.delTx('${tx.id}')" class="text-slate-200 hover:text-rose-500 p-2"><i data-lucide="trash-2"></i></button>
                                     </td>
                                 </tr>`).join('')}
-                                ${filtered.length === 0 ? '<tr><td colspan="3" class="p-10 text-center text-slate-400 italic">Nada para mostrar.</td></tr>' : ''}
+                                ${filtered.length === 0 ? '<tr><td colspan="3" class="p-10 text-center text-slate-400 italic">Nenhuma despesa para mostrar.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
@@ -290,7 +364,9 @@
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         ${state.goals.map(g => {
-                            const prog = Math.min(100, (g.current / g.target) * 100);
+                            const current = g.current || g.currentAmount || 0;
+                            const target = g.target || g.targetAmount || 1;
+                            const prog = Math.min(100, (current / target) * 100);
                             return `
                             <div class="bg-white p-6 rounded-[2.5rem] border shadow-sm relative overflow-hidden">
                                 <div class="absolute top-0 left-0 h-1 bg-emerald-500" style="width: ${prog}%"></div>
@@ -302,8 +378,8 @@
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-end mb-4">
-                                    <div><p class="text-[9px] uppercase font-black text-slate-400">Progresso</p><p class="text-xl font-black text-emerald-600">${fmtBRL(g.current)}</p></div>
-                                    <div class="text-right"><p class="text-[9px] uppercase font-black text-slate-400">Meta</p><p class="font-bold text-slate-700">${fmtBRL(g.target)}</p></div>
+                                    <div><p class="text-[9px] uppercase font-black text-slate-400">Progresso</p><p class="text-xl font-black text-emerald-600">${fmtBRL(current)}</p></div>
+                                    <div class="text-right"><p class="text-[9px] uppercase font-black text-slate-400">Meta</p><p class="font-bold text-slate-700">${fmtBRL(target)}</p></div>
                                 </div>
                                 <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden mb-4"><div class="bg-emerald-500 h-full transition-all duration-700" style="width:${prog}%"></div></div>
                                 <button onclick="window.openDistributeModal('${g.id}')" class="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase">Alocar do Porquinho</button>
@@ -323,14 +399,17 @@
                             ${state.banks.map(b => `
                                 <div class="p-4 bg-slate-50 rounded-2xl border">
                                     <input type="text" value="${b.name}" onchange="window.updBank('${b.id}', 'name', this.value)" class="w-full bg-transparent font-black text-slate-700 border-none p-1 mb-1">
-                                    <input type="number" step="0.01" value="${b.balance}" onchange="window.updBank('${b.id}', 'balance', this.value)" class="w-full bg-white rounded-lg p-2 font-black text-emerald-600 text-sm border border-slate-100">
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" step="0.01" value="${b.balance}" onchange="window.updBank('${b.id}', 'balance', this.value)" class="flex-1 bg-white rounded-lg p-2 font-black text-emerald-600 text-sm border border-slate-100">
+                                        <button onclick="window.delBank('${b.id}')" class="text-slate-300 hover:text-rose-500 p-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                    </div>
                                 </div>`).join('')}
                         </div>
                     </section>
 
                     <section class="bg-white p-8 rounded-[2.5rem] border space-y-6">
                         <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">Categorias</h3>
-                        <p class="text-[10px] text-slate-400 -mt-4">Clique no nome para editar ou no ícone para excluir.</p>
+                        <p class="text-[10px] text-slate-400 -mt-4 italic">Clique no texto para editar ou no ícone para gerenciar.</p>
                         <div class="flex gap-2">
                             <input type="text" id="new-cat-input" placeholder="Nova Categoria" class="flex-1 p-3 bg-slate-50 border rounded-xl font-bold">
                             <button onclick="window.addCat()" class="bg-emerald-600 text-white px-6 rounded-xl font-black uppercase text-[10px]">Add</button>
@@ -338,7 +417,7 @@
                         <div class="flex flex-wrap gap-2">
                             ${state.categories.map((c, idx) => `
                                 <div class="flex items-center gap-2 bg-slate-50 border pl-4 pr-2 py-2 rounded-full hover:border-emerald-200 transition-colors">
-                                    <span onclick="window.editCat(${idx})" class="text-sm font-bold text-slate-600 cursor-pointer hover:text-emerald-600 transition-colors" title="Clique para renomear">
+                                    <span onclick="window.editCat(${idx})" class="text-sm font-bold text-slate-600 cursor-pointer hover:text-emerald-600 transition-colors">
                                         ${c}
                                     </span>
                                     <div class="flex gap-1 border-l pl-2 border-slate-200">
@@ -350,37 +429,25 @@
                                         </button>
                                     </div>
                                 </div>`).join('')}
-                            ${state.categories.length === 0 ? '<p class="text-slate-400 text-xs italic">Nenhuma categoria cadastrada.</p>' : ''}
                         </div>
                     </section>
                 </div>`;
         }
 
-        // --- MODAIS E AÇÕES ---
-        let currentModalType = 'expense';
-        function setModalError(m) { 
-            const e = document.getElementById('modal-error'); 
-            if(e) {
-                e.innerText = m; 
-                e.classList.remove('hidden'); 
-                e.classList.add('error-shake'); 
-                setTimeout(()=>e.classList.remove('error-shake'), 400); 
-            }
-        }
+        // --- MODAIS ---
         window.closeModal = () => { document.getElementById('modal-overlay').classList.remove('active'); };
-
+        
         window.openTxModal = () => {
-            currentModalType = 'expense';
             const content = document.getElementById('modal-content');
             content.innerHTML = `
                 <div class="space-y-6">
-                    <h3 class="text-2xl font-black text-slate-800">Nova Transação</h3>
+                    <h3 class="text-2xl font-black text-slate-800">Nova Despesa</h3>
                     <div id="modal-error" class="hidden p-4 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-2xl"></div>
                     
                     <div class="space-y-4">
-                        <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Título</label><input type="text" id="tx-name" placeholder="Ex: Aluguel, Mercado..." class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
+                        <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">O que é?</label><input type="text" id="tx-name" placeholder="Ex: Aluguel, Cartão, Luz..." class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
                         <div class="grid grid-cols-2 gap-4">
-                            <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Valor (R$)</label><input type="number" id="tx-amount" step="0.01" placeholder="0.00" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
+                            <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Valor (R$)</label><input type="number" id="tx-amount" step="0.01" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
                             <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Categoria</label>
                                 <select id="tx-cat" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
                                     ${state.categories.map(c => `<option value="${c}">${c}</option>`).join('')}
@@ -398,26 +465,24 @@
                                 </select>
                             </div>
                         </div>
-                        <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Data da 1ª Parcela</label><input type="date" id="tx-date" value="${getISO(new Date())}" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
+                        <div><label class="text-[9px] font-black text-slate-400 uppercase ml-2">Data Vencimento</label><input type="date" id="tx-date" value="${getISO(new Date())}" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
                     </div>
-                    <div class="flex gap-4 pt-4"><button onclick="window.closeModal()" class="flex-1 font-bold text-slate-400 uppercase text-[10px]">Cancelar</button><button onclick="window.confirmTx()" class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[10px]">Salvar</button></div>
+                    <div class="flex gap-4 pt-4"><button onclick="window.closeModal()" class="flex-1 font-bold text-slate-400 uppercase text-[10px]">Cancelar</button><button onclick="window.confirmTx()" class="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-[10px]">Agendar Gasto</button></div>
                 </div>`;
             document.getElementById('modal-overlay').classList.add('active');
-            if(window.lucide) lucide.createIcons();
-        }
+        };
 
         window.confirmTx = () => {
-            const baseName = document.getElementById('tx-name').value;
+            const name = document.getElementById('tx-name').value;
             const amount = parseFloat(document.getElementById('tx-amount').value);
             const instCount = parseInt(document.getElementById('tx-installments').value) || 1;
             const freq = document.getElementById('tx-freq').value;
             const startDate = document.getElementById('tx-date').value;
             const category = document.getElementById('tx-cat').value;
 
-            if(!baseName || isNaN(amount)) return setModalError('Preencha nome e valor');
+            if(!name || isNaN(amount)) return alert('Preencha nome e valor');
 
             let baseDate = new Date(startDate + 'T12:00:00');
-
             for(let i = 0; i < instCount; i++) {
                 let currentTxDate = new Date(baseDate);
                 if (freq === 'daily') currentTxDate.setDate(baseDate.getDate() + i);
@@ -425,176 +490,127 @@
                 if (freq === 'fortnightly') currentTxDate.setDate(baseDate.getDate() + (i * 14));
                 if (freq === 'monthly') currentTxDate.setMonth(baseDate.getMonth() + i);
 
-                const finalName = instCount > 1 ? `${baseName} (${i + 1}/${instCount})` : baseName;
-
                 state.transactions.push({ 
                     id: generateUID(), 
-                    name: finalName, 
-                    amount, 
-                    type: currentModalType,
-                    category, 
-                    date: getISO(currentTxDate), 
-                    status: 'open' 
+                    name: instCount > 1 ? `${name} (${i + 1}/${instCount})` : name, 
+                    amount, type: 'expense', category, 
+                    date: getISO(currentTxDate), status: 'open' 
                 });
             }
             window.save(); window.closeModal();
-        }
+        };
 
-        window.openDeleteGoalModal = (id) => {
-            const g = state.goals.find(x => x.id === id);
+        window.openPayModal = (id) => {
+            const tx = state.transactions.find(t=>t.id===id);
             const content = document.getElementById('modal-content');
             content.innerHTML = `
-                <div class="space-y-6 text-center">
-                    <div class="mx-auto bg-rose-50 w-16 h-16 rounded-full flex items-center justify-center text-rose-500"><i data-lucide="alert-triangle"></i></div>
-                    <h3 class="text-2xl font-black text-slate-800">Excluir Meta?</h3>
-                    <p class="text-sm text-slate-500">Deseja apagar <b>"${g.name}"</b>? O saldo de <b>${fmtBRL(g.current)}</b> voltará para o porquinho.</p>
-                    <div class="flex gap-4 pt-4"><button onclick="window.closeModal()" class="flex-1 p-4 bg-slate-50 rounded-2xl font-black uppercase text-[10px]">Não</button><button onclick="window.confirmDelGoal('${id}')" class="flex-1 p-4 bg-rose-500 text-white rounded-2xl font-black uppercase text-[10px]">Sim, Excluir</button></div>
-                </div>`;
-            if (window.lucide) lucide.createIcons();
-            document.getElementById('modal-overlay').classList.add('active');
-        }
+                <div class="space-y-6">
+                    <h3 class="text-xl font-black text-slate-800">Confirmar Pagamento</h3>
+                    <div class="bg-emerald-50 p-6 rounded-3xl border border-emerald-100 shadow-inner">
+                        <p class="text-[10px] font-black text-emerald-600 uppercase mb-2">Resumo da Conta</p>
+                        <h4 class="text-lg font-bold text-slate-700">${tx.name}</h4>
+                        <p class="text-3xl font-black text-emerald-600">${fmtBRL(tx.amount)}</p>
+                    </div>
 
-        window.confirmDelGoal = (id) => { state.goals = state.goals.filter(x => x.id !== id); window.save(); window.closeModal(); }
+                    <div class="bg-amber-50 p-5 rounded-3xl border border-amber-100 flex gap-4 items-start">
+                        <div class="bg-amber-100 p-2 rounded-xl text-amber-600"><i data-lucide="alert-circle"></i></div>
+                        <p class="text-xs font-bold text-amber-800 leading-relaxed">
+                            <span class="block text-[10px] uppercase font-black text-amber-600 mb-1">Atenção!</span>
+                            O saldo dos bancos cadastrados <span class="font-black underline">não será alterado</span> automaticamente. 
+                            Lembre-se de atualizar o saldo real no menu <strong>Configurações/Bancos</strong> após pagar no seu banco.
+                        </p>
+                    </div>
+
+                    <div class="flex flex-col gap-3">
+                        <button onclick="window.confirmPay('${id}')" class="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-emerald-100 transition-transform active:scale-95">
+                            Confirmar Pagamento
+                        </button>
+                        <button onclick="window.closeModal()" class="w-full py-4 font-bold text-slate-400 uppercase text-[10px]">Cancelar</button>
+                    </div>
+                </div>`;
+            document.getElementById('modal-overlay').classList.add('active');
+            lucide.createIcons();
+        };
+
+        window.confirmPay = (tid) => {
+            const t = state.transactions.find(x=>x.id===tid);
+            if(t) {
+                t.status = 'paid'; 
+                window.save(); 
+                window.closeModal(); 
+            }
+        };
+
+        // --- AUXILIARES ---
+        window.addBank = () => { state.banks.push({ id: 'b'+Date.now(), name: 'Novo Banco', balance: 0 }); window.save(); }
+        window.updBank = (id, k, v) => { const b = state.banks.find(x=>x.id===id); if(b){ b[k] = k === 'balance' ? parseFloat(v)||0 : v; window.save(); } }
+        window.delBank = (id) => { 
+            if(confirm('Deseja excluir este banco?')) {
+                state.banks = state.banks.filter(b => b.id !== id);
+                window.save();
+                if (state.banks.length === 0) window.render(); // Voltará para tela de setup se deletar tudo
+            }
+        }
+        window.delTx = (id) => { if(confirm('Excluir?')){ state.transactions = state.transactions.filter(t=>t.id!==id); window.save(); } }
 
         window.openGoalModal = () => {
-            const free = Math.max(0, state.savingsPool - getTotalAllocated());
             const content = document.getElementById('modal-content');
             content.innerHTML = `
                 <div class="space-y-6">
                     <h3 class="text-2xl font-black text-slate-800">Nova Meta</h3>
-                    <div id="modal-error" class="hidden p-4 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-2xl"></div>
-                    <input type="text" id="goal-name" placeholder="Ex: Reserva de Emergência" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="text-[9px] uppercase font-black ml-2 text-slate-400">Saldo Inicial</label><input type="number" id="goal-cur" value="0" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
-                        <div><label class="text-[9px] uppercase font-black ml-2 text-slate-400">Objetivo Final</label><input type="number" id="goal-tar" placeholder="Alvo (R$)" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-[9px] uppercase font-black ml-2 text-slate-400">Nome da Meta</label>
+                            <input type="text" id="goal-name" placeholder="Ex: Viagem, Carro..." class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[9px] uppercase font-black ml-2 text-slate-400">Saldo Inicial</label>
+                                <input type="number" id="goal-cur" value="0" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
+                            </div>
+                            <div>
+                                <label class="text-[9px] uppercase font-black ml-2 text-slate-400">Objetivo Final</label>
+                                <input type="number" id="goal-tar" placeholder="Alvo (R$)" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
+                            </div>
+                        </div>
                     </div>
-                    <p class="text-[9px] text-blue-500 font-bold ml-2 italic">Disponível agora: ${fmtBRL(free)}</p>
-                    <button onclick="window.confirmGoal()" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px]">Criar Meta</button>
+                    <div class="flex gap-4 pt-4">
+                        <button onclick="window.closeModal()" class="flex-1 font-bold text-slate-400 uppercase text-[10px]">Cancelar</button>
+                        <button onclick="window.confirmGoal()" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px]">Criar Meta</button>
+                    </div>
                 </div>`;
             document.getElementById('modal-overlay').classList.add('active');
-        }
+        };
 
         window.confirmGoal = () => {
             const n = document.getElementById('goal-name').value;
-            const cur = parseFloat(document.getElementById('goal-cur').value) || 0;
             const tar = parseFloat(document.getElementById('goal-tar').value);
-            const free = state.savingsPool - getTotalAllocated();
-            if(!n || isNaN(tar)) return setModalError('Preencha os campos obrigatórios');
-            if(cur > free) return setModalError(`Saldo livre insuficiente no porquinho (${fmtBRL(free)})`);
-            state.goals.push({ id: 'g'+Date.now(), name: n, targetAmount: tar, currentAmount: cur, target: tar, current: cur });
+            const cur = parseFloat(document.getElementById('goal-cur').value) || 0;
+            if(!n || isNaN(tar)) return alert('Preencha os campos obrigatórios');
+            state.goals.push({ id: 'g'+Date.now(), name: n, target: tar, current: cur });
             window.save(); window.closeModal();
-        }
-
-        window.openEditGoalModal = (id) => {
-            const g = state.goals.find(x => x.id === id);
-            const otherAllocated = state.goals.filter(x => x.id !== id).reduce((a, x) => a + (x.current || x.currentAmount || 0), 0);
-            const max = state.savingsPool - otherAllocated;
-            const content = document.getElementById('modal-content');
-            content.innerHTML = `
-                <div class="space-y-6">
-                    <h3 class="text-2xl font-black text-slate-800">Editar Meta</h3>
-                    <div id="modal-error" class="hidden p-4 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-2xl"></div>
-                    <input id="edit-g-name" value="${g.name}" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div><label class="text-[9px] uppercase font-black ml-2">Alocado</label><input type="number" id="edit-g-cur" value="${g.current || g.currentAmount}" class="w-full p-4 bg-slate-50 border rounded-2xl font-black text-emerald-600"></div>
-                        <div><label class="text-[9px] uppercase font-black ml-2">Objetivo</label><input type="number" id="edit-g-tar" value="${g.target || g.targetAmount}" class="w-full p-4 bg-slate-50 border rounded-2xl font-bold"></div>
-                    </div>
-                    <p class="text-[9px] text-blue-500 font-bold ml-2">Máximo permitido p/ esta meta: ${fmtBRL(max)}</p>
-                    <button onclick="window.confirmEditGoal('${id}')" class="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[10px]">Salvar Alterações</button>
-                </div>`;
-            document.getElementById('modal-overlay').classList.add('active');
-        }
-
-        window.confirmEditGoal = (id) => {
-            const g = state.goals.find(x => x.id === id);
-            const newCur = parseFloat(document.getElementById('edit-g-cur').value) || 0;
-            const otherAllocated = state.goals.filter(x => x.id !== id).reduce((a, x) => a + (x.current || x.currentAmount || 0), 0);
-            if((otherAllocated + newCur) > state.savingsPool) return setModalError(`Saldo físico insuficiente no porquinho!`);
-            g.name = document.getElementById('edit-g-name').value;
-            g.current = newCur;
-            g.currentAmount = newCur;
-            g.target = parseFloat(document.getElementById('edit-g-tar').value);
-            g.targetAmount = g.target;
-            window.save(); window.closeModal();
-        }
-
-        window.openDistributeModal = (id) => {
-            const free = state.savingsPool - getTotalAllocated();
-            const content = document.getElementById('modal-content');
-            content.innerHTML = `
-                <div class="space-y-6">
-                    <h3 class="text-2xl font-black text-slate-800">Alocar Saldo</h3>
-                    <div id="modal-error" class="hidden p-4 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-2xl"></div>
-                    <div class="bg-blue-50 p-4 rounded-xl flex justify-between font-black text-blue-700"><span>Livre no Porquinho:</span><span>${fmtBRL(free)}</span></div>
-                    <input type="number" id="dist-val" placeholder="Quanto deseja mover?" class="w-full p-4 bg-slate-50 border rounded-2xl font-black text-emerald-600 text-center text-xl">
-                    <div class="flex gap-4">
-                        <button onclick="window.closeModal()" class="flex-1 py-4 bg-slate-100 text-slate-400 rounded-2xl font-black uppercase text-[10px]">Cancelar Alocação</button>
-                        <button onclick="window.confirmDist('${id}')" class="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Confirmar</button>
-                    </div>
-                </div>`;
-            document.getElementById('modal-overlay').classList.add('active');
-        }
-
-        window.confirmDist = (id) => {
-            const free = state.savingsPool - getTotalAllocated();
-            const val = parseFloat(document.getElementById('dist-val').value);
-            if(isNaN(val) || val <= 0 || val > free) return setModalError('Saldo insuficiente ou valor inválido');
-            const g = state.goals.find(x => x.id === id);
-            if(g.current !== undefined) g.current += val;
-            if(g.currentAmount !== undefined) g.currentAmount += val;
-            window.save(); window.closeModal();
-        }
+        };
 
         window.openSupplyPoolModal = () => {
             const content = document.getElementById('modal-content');
             content.innerHTML = `
                 <div class="space-y-6">
-                    <h3 class="text-2xl font-black text-slate-800 text-center">Saldo Físico</h3>
-                    <div id="modal-error" class="hidden p-4 bg-rose-50 text-rose-600 text-[10px] font-black uppercase rounded-2xl"></div>
-                    <p class="text-xs text-slate-500 text-center px-4">Informe o valor total em dinheiro que você possui na reserva/físico.</p>
+                    <h3 class="text-2xl font-black text-slate-800 text-center">Reserva em Mãos</h3>
                     <input type="number" id="pool-new" value="${state.savingsPool}" class="w-full p-6 bg-slate-50 border-2 rounded-3xl font-black text-3xl text-center text-emerald-600">
-                    <button onclick="window.confirmPool()" class="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[10px]">Salvar Novo Total</button>
+                    <div class="flex gap-4">
+                        <button onclick="window.closeModal()" class="flex-1 font-bold text-slate-400 uppercase text-[10px]">Cancelar</button>
+                        <button onclick="window.confirmPool()" class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[10px]">Salvar</button>
+                    </div>
                 </div>`;
             document.getElementById('modal-overlay').classList.add('active');
-        }
+        };
 
         window.confirmPool = () => {
             const val = parseFloat(document.getElementById('pool-new').value);
-            const alloc = getTotalAllocated();
-            if(isNaN(val) || val < alloc) return setModalError(`Mínimo permitido: ${fmtBRL(alloc)} (já alocado em metas)`);
-            state.savingsPool = val; window.save(); window.closeModal();
-        }
+            state.savingsPool = isNaN(val) ? 0 : val;
+            window.save(); window.closeModal();
+        };
 
-        // --- AUXILIARES ---
-        window.delTx = (id) => { if(confirm('Excluir esta transação?')){ state.transactions = state.transactions.filter(t=>t.id!==id); window.save(); } }
-        window.markPaid = (id) => { const t = state.transactions.find(x=>x.id===id); if(t){ t.status = 'paid'; window.save(); } }
-        window.openPayModal = (id) => {
-            const tx = state.transactions.find(t=>t.id===id);
-            const content = document.getElementById('modal-content');
-            content.innerHTML = `
-                <div class="space-y-4">
-                    <h3 class="text-xl font-black">Pagar "${tx.name}"</h3>
-                    <p class="text-sm text-slate-500">Qual banco você usou para este pagamento?</p>
-                    <div class="space-y-2">
-                        ${state.banks.map(b=>`
-                            <button onclick="window.confirmPay('${id}','${b.id}')" class="w-full p-4 bg-slate-50 rounded-xl flex justify-between hover:bg-emerald-50 transition-all border border-transparent hover:border-emerald-100">
-                                <span>${b.name}</span>
-                                <b>${fmtBRL(b.balance)}</b>
-                            </button>`).join('')}
-                    </div>
-                    <button onclick="window.closeModal()" class="w-full text-slate-400 font-bold pt-4">Cancelar</button>
-                </div>`;
-            document.getElementById('modal-overlay').classList.add('active');
-        }
-        window.confirmPay = (tid, bid) => {
-            const t = state.transactions.find(x=>x.id===tid);
-            const b = state.banks.find(x=>x.id===bid);
-            if(t && b) { b.balance -= t.amount; t.status = 'paid'; window.save(); window.closeModal(); }
-        }
-        window.addBank = () => { state.banks.push({ id: 'b'+Date.now(), name: 'Novo Banco', balance: 0 }); window.save(); }
-        window.updBank = (id, k, v) => { const b = state.banks.find(x=>x.id===id); if(b){ b[k] = k === 'balance' ? parseFloat(v)||0 : v; window.save(); } }
-
-        // Inicialização
         window.onload = () => { window.load(); window.render(); };
     </script>
 </body>
